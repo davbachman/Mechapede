@@ -1,0 +1,15 @@
+# Machine interior artwork
+
+Generated with the built-in image generation tool. Project asset: `assets/machine-interior.png`. The original generated PNG is preserved without image edits; the game applies its lighting and contrast during rendering.
+
+## Final generation prompt
+
+Use case: stylized-concept
+Asset type: finished background texture for a polished 2D arcade game's vertical playfield, portrait 3:4 composition (ideally 1152x1536).
+Primary request: the player is inside a broken electromechanical machine, with runaway steel chains and brass gears moving above this background.
+Scene: a close, straight-on view into the opened guts of a substantial mid-century industrial electromechanical machine. The central surface is the battered dark gunmetal backplate behind the moving parts. Around and under its edges are recessed mechanical cavities, copper-wound relays, tightly bundled black insulated wires, cable clips, ribbed conduit, ceramic terminal blocks, worn bolt heads, cracked enamel, oil smudges, a few scored metal channels and broken brackets. Intricate believable constructed machinery, aged and malfunctioning but not a junk heap. Suggest a larger machine continuing beyond all image edges.
+Composition: fixed orthographic frontal camera; no perspective vanishing point, no floor or room or horizon. Full bleed image. Keep the middle 75 percent of the width open and comparatively quiet: dark layered steel sheets with restrained fine scuffs, a few shallow inset service covers, and sparse rivets. Most deep mechanical detail belongs in the far left and right margins and the top 12 percent. The bottom quarter remains a dark uninterrupted usable backplate for the player. Avoid obvious large circular gears anywhere, because actual gameplay gears are rendered separately. Do not draw any foreground chains or game objects.
+Style: premium cinematic game environment artwork with tangible photographic material detail, carefully designed dark sci-fi industrial salvage, not a cartoon, not flat vector art. Sharp machined edges, matte oxidized metal, faint brushed grain, recessed cavities, subtle grime.
+Lighting: dim cool desaturated blue-grey overhead work light with small pools of low amber light from damaged machine cavities near the edges. Sparse dull red status lamps confined to far margins; no bright lights in the center. Clear layered depth at the perimeter, broad gently lit dark central plate. No excessive bloom, sparks, smoke, fog, or bright highlights.
+Color: nearly black charcoal, dark blue-grey steel, subdued copper, muted old brass, tiny restrained amber/red light. Center plate low contrast so tiny silver steel loops, gold gears, and a bright cutting pulse will stand out.
+Constraints: Background only. No text, letters, numbers, labels, logos, watermark, interface, score displays, borders, frame around image, characters, robots, weapons, spaceships, loose coins, chains, prominent cog wheels. No repeating checkerboard. Produce one coherent richly detailed machine interior with a deliberately calm playable center.

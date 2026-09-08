@@ -1,0 +1,41 @@
+name: Deploy Mechapede to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - name: Check game rules and motion
+        run: npm test
+      - uses: actions/configure-pages@v6.0.0
+      - name: Assemble static game
+        run: |
+          mkdir _site
+          cp index.html style.css favicon.svg _site/
+          cp -R src assets _site/
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: _site
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1
