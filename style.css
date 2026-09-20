@@ -393,6 +393,46 @@ h1 span {
   justify-content: space-between;
   margin: auto;
 }
+.variant-picker {
+  border: 0;
+  padding: 0;
+  margin: -10px auto 19px;
+  max-width: 300px;
+  min-width: 0;
+}
+.variant-picker[hidden] { display: none; }
+.variant-picker legend {
+  margin: 0 auto 8px;
+  color: #99a5a0;
+  font: 9px ui-monospace, monospace;
+  letter-spacing: 1.6px;
+}
+.variant-options { display: flex; gap: 6px; }
+.variant-options button {
+  flex: 1;
+  padding: 10px 5px;
+  border: 1px solid #64716b;
+  border-radius: 2px;
+  background: #172120;
+  color: #cbd5cd;
+  font: 700 11px ui-monospace, monospace;
+  letter-spacing: 1px;
+}
+.variant-options button[aria-pressed="true"] {
+  border-color: #e8b45f;
+  color: #ffda91;
+  background: #393425;
+  box-shadow: inset 0 -2px #c39147;
+}
+.variant-options button:hover { border-color: #fff0bb; }
+.variant-options button:focus-visible { outline: 2px solid #fff0bb; outline-offset: 3px; }
+.overlay #variant-description {
+  margin: 9px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  min-height: 2.8em;
+  color: #b4c0ba;
+}
 .primary-button:hover {
   background: linear-gradient(#ffda8e, #ecb857 72%, #d1963b);
 }

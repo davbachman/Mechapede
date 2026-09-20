@@ -2,6 +2,7 @@
 import { GearMotion } from "./gear-motion.js";
 import { TreadMotion } from "./tread-motion.js";
 import { chainPoses } from "./chain-pose.js";
+import { wrapX, wrappedDelta } from "./topology.js";
 const TAU = Math.PI * 2;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 function roundRect(c, x, y, w, h, r) {
@@ -173,6 +174,7 @@ export class Renderer {
   }
   draw(s, delta = 1 / 60) {
     const c = this.c;
+    this.cylinder = s.variant === "cylinder";
     c.setTransform(
       this.canvas.width / 240,
       0,
@@ -184,28 +186,45 @@ export class Renderer {
     c.clearRect(0, 0, 240, 256);
     const t = s.time || 0;
     this.background(s.wave || 1, t);
+    if (this.cylinder) this.seamMarks();
     this.workLight(s);
     this.gearMotion.update(s);
     this.treadMotion.update(s);
-    for (const gear of s.gears || []) this.gear(gear, t);
+    for (const gear of s.gears || [])
+      this.wrapDraw(gear.x, 6, () => this.gear(gear, t));
     for (const section of s.sections || []) this.chain(section, t, s.gears);
-    if (s.drone) this.drone(s.drone, t);
-    if (s.dispenser) this.dispenser(s.dispenser, t);
-    if (s.crawler) this.crawler(s.crawler, t);
+    if (s.drone)
+      this.wrapDraw(
+        s.drone.x,
+        16,
+        () => this.drone(s.drone, t),
+        s.drone.entered !== false,
+      );
+    if (s.dispenser)
+      this.wrapDraw(s.dispenser.x, 5, () => this.dispenser(s.dispenser, t));
+    if (s.crawler)
+      this.wrapDraw(
+        s.crawler.x,
+        10,
+        () => this.crawler(s.crawler, t),
+        s.crawler.entered !== false,
+      );
     const b = s.bullet;
     if (b) {
-      c.fillStyle = "#fffbe0";
-      roundRect(c, b.x - 0.65, b.y - 3, 1.3, 5, 0.4);
-      c.fill();
-      c.fillStyle = "#eac17577";
-      c.fillRect(b.x - 1.1, b.y + 2, 2.2, 3);
+      this.wrapDraw(b.x, 2, () => {
+        c.fillStyle = "#fffbe0";
+        roundRect(c, b.x - 0.65, b.y - 3, 1.3, 5, 0.4);
+        c.fill();
+        c.fillStyle = "#eac17577";
+        c.fillRect(b.x - 1.1, b.y + 2, 2.2, 3);
+      });
     }
     // Preserve carriage visibility when pausing a death animation, including when
     // the death and pause events arrive before the next rendered frame.
     if (s.mode !== "paused")
       this.hiddenPlayer = s.mode === "dying" || s.mode === "gameover";
     if (s.player && s.mode !== "title" && !this.hiddenPlayer)
-      this.player(s.player, t, s.mode);
+      this.wrapDraw(s.player.x, 5, () => this.player(s.player, t, s.mode));
     const active = !["paused", "title"].includes(s.mode);
     if (active) {
       for (const p of this.particles) {
@@ -220,68 +239,96 @@ export class Renderer {
     }
     for (const p of this.particles) {
       if (p.life <= 0) continue;
-      c.globalAlpha = Math.max(0, p.life);
-      c.fillStyle = p.color;
-      if (p.mount) {
-        const r = 3.8 + p.life * 2.8;
-        c.globalAlpha = p.life * 0.8;
-        // Four short mounting jaws close around an already-solid gear. Nothing
-        // delays the obstacle appearing or changes its collision footprint.
-        for (const side of [-1, 1]) {
-          line(
-            c,
-            p.x + side * r,
-            p.y - 1.1,
-            p.x + side * r,
-            p.y + 1.1,
-            p.color,
-            0.5,
-          );
-          line(
-            c,
-            p.x - 1.1,
-            p.y + side * r,
-            p.x + 1.1,
-            p.y + side * r,
-            p.color,
-            0.5,
-          );
-        }
-      } else if (p.ring) {
-        c.strokeStyle = p.color;
-        c.lineWidth = 0.5;
-        c.beginPath();
-        c.arc(p.x, p.y, 3 + (1 - p.life) * 5, 0, TAU);
-        c.stroke();
-      } else {
-        c.save();
-        c.translate(p.x, p.y);
-        if (p.looseGear) c.scale(1, this.roundScaleY);
-        c.rotate(p.life * 4);
-        if (p.looseGear) {
-          cogPath(c, 1.8, 7);
-          c.fill();
-          c.fillStyle = "#263439";
+      this.wrapDraw(p.x, 9, () => {
+        c.globalAlpha = Math.max(0, p.life);
+        c.fillStyle = p.color;
+        if (p.mount) {
+          const r = 3.8 + p.life * 2.8;
+          c.globalAlpha = p.life * 0.8;
+          // Four short mounting jaws close around an already-solid gear. Nothing
+          // delays the obstacle appearing or changes its collision footprint.
+          for (const side of [-1, 1]) {
+            line(
+              c,
+              p.x + side * r,
+              p.y - 1.1,
+              p.x + side * r,
+              p.y + 1.1,
+              p.color,
+              0.5,
+            );
+            line(
+              c,
+              p.x - 1.1,
+              p.y + side * r,
+              p.x + 1.1,
+              p.y + side * r,
+              p.color,
+              0.5,
+            );
+          }
+        } else if (p.ring) {
+          c.strokeStyle = p.color;
+          c.lineWidth = 0.5;
           c.beginPath();
-          c.arc(0, 0, 0.7, 0, TAU);
-          c.fill();
-        } else c.fillRect(-0.4, -0.4, 1.2, 0.6);
-        c.restore();
-      }
+          c.arc(p.x, p.y, 3 + (1 - p.life) * 5, 0, TAU);
+          c.stroke();
+        } else {
+          c.save();
+          c.translate(p.x, p.y);
+          if (p.looseGear) c.scale(1, this.roundScaleY);
+          c.rotate(p.life * 4);
+          if (p.looseGear) {
+            cogPath(c, 1.8, 7);
+            c.fill();
+            c.fillStyle = "#263439";
+            c.beginPath();
+            c.arc(0, 0, 0.7, 0, TAU);
+            c.fill();
+          } else c.fillRect(-0.4, -0.4, 1.2, 0.6);
+          c.restore();
+        }
+      });
     }
     c.globalAlpha = 1;
     for (const p of this.labels) {
       if (p.life <= 0) continue;
-      c.globalAlpha = clamp(p.life * 2, 0, 1);
-      c.font = "bold 5px monospace";
-      c.textAlign = "center";
-      c.fillStyle = "#f4d79b";
-      c.fillText(p.text, p.x, p.y - (1 - p.life) * 8);
+      this.wrapDraw(p.x, 12, () => {
+        c.globalAlpha = clamp(p.life * 2, 0, 1);
+        c.font = "bold 5px monospace";
+        c.textAlign = "center";
+        c.fillStyle = "#f4d79b";
+        c.fillText(p.text, p.x, p.y - (1 - p.life) * 8);
+      });
     }
     c.globalAlpha = 1;
     this.particles = this.particles.filter((p) => p.life > 0);
     this.labels = this.labels.filter((p) => p.life > 0);
     if (s.mode === "title") this.attract(t);
+  }
+  // Duplicate only the portion of an object intersecting the cylinder seam.
+  // Canvas clipping supplies the two halves; its simulation object stays unique.
+  wrapDraw(x, radius, draw, entered = true) {
+    if (!this.cylinder || !entered) {
+      draw();
+      return;
+    }
+    const center = wrapX(x);
+    const offsets = [center - x];
+    if (center < radius) offsets.push(center - x + 240);
+    if (center > 240 - radius) offsets.push(center - x - 240);
+    for (const offset of offsets) {
+      this.c.save();
+      this.c.translate(offset, 0);
+      draw();
+      this.c.restore();
+    }
+  }
+  seamMarks() {
+    for (let y = 12; y < 256; y += 32) {
+      line(this.c, 0, y, 1.8, y, "#9aceca66", 0.45);
+      line(this.c, 238.2, y, 240, y, "#9aceca66", 0.45);
+    }
   }
   background(wave, t = 0) {
     const c = this.c;
@@ -388,20 +435,24 @@ export class Renderer {
       !["title", "dying", "gameover"].includes(s.mode)
     ) {
       const { x, y } = s.player;
-      const glow = c.createRadialGradient(x, y - 3, 1, x, y - 3, 13);
-      glow.addColorStop(0, "#e8c88722");
-      glow.addColorStop(0.4, "#bf995010");
-      glow.addColorStop(1, "#bf995000");
-      c.fillStyle = glow;
-      c.fillRect(x - 13, y - 16, 26, 26);
+      this.wrapDraw(x, 13, () => {
+        const glow = c.createRadialGradient(x, y - 3, 1, x, y - 3, 13);
+        glow.addColorStop(0, "#e8c88722");
+        glow.addColorStop(0.4, "#bf995010");
+        glow.addColorStop(1, "#bf995000");
+        c.fillStyle = glow;
+        c.fillRect(x - 13, y - 16, 26, 26);
+      });
     }
     if (s.bullet) {
       const { x, y } = s.bullet;
-      const glow = c.createRadialGradient(x, y, 0, x, y, 5);
-      glow.addColorStop(0, "#ffdb8833");
-      glow.addColorStop(1, "#ffdb8800");
-      c.fillStyle = glow;
-      c.fillRect(x - 5, y - 5, 10, 10);
+      this.wrapDraw(x, 5, () => {
+        const glow = c.createRadialGradient(x, y, 0, x, y, 5);
+        glow.addColorStop(0, "#ffdb8833");
+        glow.addColorStop(1, "#ffdb8800");
+        c.fillStyle = glow;
+        c.fillRect(x - 5, y - 5, 10, 10);
+      });
     }
   }
   gear(g, t) {
@@ -505,19 +556,30 @@ export class Renderer {
   }
   chain(section, t, gears = []) {
     const c = this.c;
-    const poses = chainPoses(section, gears);
+    const poses = chainPoses(
+      section,
+      gears,
+      this.cylinder ? "cylinder" : "classic",
+    );
     // Short articulated drawbars keep the convoy connected. Each belt is a
     // complete machine, including followers and newly promoted leaders.
     for (let i = 1; i < poses.length; i++) {
-      const a = poses[i - 1],
-        b = poses[i];
+      const a = poses[i - 1];
+      const rawB = poses[i];
+      const b = this.cylinder
+        ? { ...rawB, x: a.x + wrappedDelta(rawB.x - a.x) }
+        : rawB;
       if (Math.hypot(a.x - b.x, a.y - b.y) > 13) continue;
-      line(c, a.x, a.y + 0.35, b.x, b.y + 0.35, "#03080a", 1.25);
-      line(c, a.x, a.y, b.x, b.y, "#435b66", 0.65);
-      line(c, a.x, a.y - 0.12, b.x, b.y - 0.12, "#82999f", 0.2);
+      this.wrapDraw((a.x + b.x) / 2, Math.abs(a.x - b.x) / 2 + 1, () => {
+        line(c, a.x, a.y + 0.35, b.x, b.y + 0.35, "#03080a", 1.25);
+        line(c, a.x, a.y, b.x, b.y, "#435b66", 0.65);
+        line(c, a.x, a.y - 0.12, b.x, b.y - 0.12, "#82999f", 0.2);
+      });
     }
     for (let i = poses.length - 1; i >= 0; i--)
-      this.trackedUnit(poses[i], poses[i].head, section.poisoned, t);
+      this.wrapDraw(poses[i].x, 5, () =>
+        this.trackedUnit(poses[i], poses[i].head, section.poisoned, t),
+      );
   }
   trackedUnit(l, head, poisoned, t) {
     const c = this.c;

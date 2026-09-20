@@ -35,6 +35,14 @@
                 <p id="overlay-description">
                   Break the chain.<br />Keep the machine from breaking you.
                 </p>
+                <fieldset class="variant-picker" id="variant-picker">
+                  <legend>PLAYFIELD</legend>
+                  <div class="variant-options">
+                    <button type="button" id="variant-classic" aria-pressed="true">CLASSIC</button>
+                    <button type="button" id="variant-cylinder" aria-pressed="false">CYLINDER ↔</button>
+                  </div>
+                  <p id="variant-description">Solid sides. Conveyors turn at the edges.</p>
+                </fieldset>
                 <button class="primary-button" id="start-btn">
                   ENGAGE DRIVE <span>↗</span>
                 </button>
@@ -65,7 +73,7 @@
                   <rect x="7" y="3" width="15" height="20" rx="7" />
                   <rect x="14" y="14" width="15" height="20" rx="7" />
                 </g></svg
-              ><span>MECHAPEDE<small>MECHANICAL ARCADE / 01</small></span></a
+              ><span>MECHAPEDE<small id="variant-label">CLASSIC / MECHANICAL ARCADE</small></span></a
             >
             <div class="header-right">
               <span class="live-dot"></span
@@ -98,7 +106,7 @@
           <div class="hud" aria-live="off">
             <div><span>SCORE</span><strong id="score">000000</strong></div>
             <div class="high">
-              <span>PERSONAL BEST</span><strong id="high-score">000000</strong>
+              <span id="best-label">CLASSIC BEST</span><strong id="high-score">000000</strong>
             </div>
             <div class="hud-wave">
               <span>WAVE</span><strong id="wave">01</strong>

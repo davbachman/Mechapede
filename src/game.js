@@ -1,10 +1,12 @@
 import { C, clamp } from "./constants.js";
+import { wrapX, wrappedDelta } from "./topology.js";
 
 /** Seeded, rendering-independent arcade simulation. All authoritative movement runs
  * at 60 Hz. dx/dy are relative logical-pixel displacements, not velocities.
  * Public state is intentionally inspectable. debug() builds deterministic scenarios. */
 export class Game {
-  constructor({ seed = 0xc4a1d, highScore = 0 } = {}) {
+  constructor({ seed = 0xc4a1d, highScore = 0, variant = "classic" } = {}) {
+    this.variant = variant === "cylinder" ? "cylinder" : "classic";
     this.seed = seed >>> 0;
     this.rng = this.seed;
     this.nextId = 1;
@@ -17,6 +19,7 @@ export class Game {
   _empty(highScore) {
     return {
       mode: "title",
+      variant: this.variant,
       score: 0,
       highScore,
       lives: C.START_LIVES,
@@ -78,6 +81,34 @@ export class Game {
   }
   inspect() {
     return JSON.parse(JSON.stringify(this.state));
+  }
+  setVariant(variant, highScore = 0) {
+    if (!["title", "gameover"].includes(this.state.mode)) return false;
+    this.variant = variant === "cylinder" ? "cylinder" : "classic";
+    this.state = this._empty(Math.max(0, Number(highScore) || 0));
+    this.accumulator = 0;
+    this.pendingInput = { dx: 0, dy: 0, fire: false };
+    this.events = [];
+    return true;
+  }
+  _xDelta(dx) {
+    return this.variant === "cylinder" ? wrappedDelta(dx) : dx;
+  }
+  _entering(object) {
+    return this.variant === "cylinder" && object.entered === false &&
+      (object.x < 0 || object.x >= C.WIDTH);
+  }
+  _objectXDelta(object, x) {
+    return this._entering(object) ? object.x - x : this._xDelta(object.x - x);
+  }
+  _wrapEnemy(enemy, previousX) {
+    if (this.variant !== "cylinder") return;
+    if (enemy.entered ||
+      (previousX >= 0 && previousX < C.WIDTH) ||
+      (enemy.x >= 0 && enemy.x < C.WIDTH)) {
+      enemy.entered = true;
+      enemy.x = wrapX(enemy.x);
+    }
   }
   start() {
     const highScore = this.state.highScore;
@@ -209,7 +240,9 @@ export class Game {
     }
   }
   _addGear(col, row, effect = true) {
-    col = clamp(Math.floor(col), 0, C.COLS - 1);
+    col = this.variant === "cylinder"
+      ? wrapX(Math.floor(col), C.COLS)
+      : clamp(Math.floor(col), 0, C.COLS - 1);
     row = clamp(Math.floor(row), 0, C.ROWS - 1);
     if (row === 0 || row >= C.ROWS - 2) return null;
     let gear = this.state.gears.find((g) => g.col === col && g.row === row);
@@ -232,6 +265,7 @@ export class Game {
     return gear;
   }
   _gearAt(x, y) {
+    if (this.variant === "cylinder") x = wrapX(x);
     const col = Math.floor(x / C.CELL),
       row = Math.floor(y / C.CELL);
     return this.state.gears.find((g) => g.col === col && g.row === row);
@@ -239,8 +273,15 @@ export class Game {
   _makeSection(count, x, y, dir = 1, options = {}) {
     const links = [];
     const path = [];
-    for (let n = 0; n <= (count + 1) * C.LINK_SPACING; n++)
-      path.push({ x: x - dir * n, y, dir, vertical: 1, turning: null });
+    const cylinder = this.variant === "cylinder";
+    for (let n = 0; n <= (count + 1) * C.LINK_SPACING; n++) {
+      const rawX = x - dir * n;
+      path.push({
+        x: cylinder ? wrapX(rawX) : rawX,
+        y, dir, vertical: 1, turning: null,
+        ...(cylinder ? { wrapStep: Math.floor(rawX / C.WIDTH) } : {}),
+      });
+    }
     const occupied = new Set(
       this.state.sections.flatMap((part) =>
         part.links.map((link) => link.slot),
@@ -257,7 +298,7 @@ export class Game {
       links.push({
         slot,
         id: this._id(),
-        x: x - dir * n * C.LINK_SPACING,
+        x: path[n * C.LINK_SPACING].x,
         y,
         angle: dir > 0 ? 0 : Math.PI,
         leader: n === 0,
@@ -266,6 +307,7 @@ export class Game {
         dir,
         vertical: 1,
         turning: null,
+        ...(cylinder ? { wrapStep: path[n * C.LINK_SPACING].wrapStep } : {}),
       });
     }
     return {
@@ -280,6 +322,7 @@ export class Game {
       inPlayer: false,
       tailReleased: false,
       added: false,
+      ...(cylinder ? { variant: "cylinder" } : {}),
       ...options,
     };
   }
@@ -330,14 +373,15 @@ export class Game {
     if (head.y >= 252 && !section.poisoned) this.state.lowerReached = true;
     const gear = this._gearAt(head.x + section.dir * C.CELL, head.y);
     const boundary =
-      (head.x <= 4 && section.dir < 0) || (head.x >= 236 && section.dir > 0);
+      this.variant !== "cylinder" &&
+      ((head.x <= 4 && section.dir < 0) || (head.x >= 236 && section.dir > 0));
     const overlap = this.state.sections.some((other) =>
       other.links.some(
         (link) =>
           link.id !== head.id &&
           Math.abs(link.y - head.y) < 0.01 &&
-          (link.x - head.x) * section.dir > 0 &&
-          (link.x - head.x) * section.dir < C.CHAIN_OVERLAP_DISTANCE,
+          this._xDelta(link.x - head.x) * section.dir > 0 &&
+          this._xDelta(link.x - head.x) * section.dir < C.CHAIN_OVERLAP_DISTANCE,
       ),
     );
     if (gear) {
@@ -388,6 +432,7 @@ export class Game {
     this.state.sections.push(solo);
   }
   _moveChains() {
+    const cylinder = this.variant === "cylinder";
     for (const section of [...this.state.sections]) {
       if (!section.links.length) continue;
       const distance = this._speed(section) * C.STEP;
@@ -405,8 +450,25 @@ export class Game {
             section.turning = null;
             section.holdRow = false;
           }
+        } else if (cylinder) {
+          // One row per horizontal circuit, with no vertical jump at the seam.
+          head.y += section.vertical * C.CELL / C.WIDTH;
         }
-        head.angle = Math.atan2(head.y - oldY, head.x - oldX);
+        if (cylinder) {
+          head.wrapStep = (head.wrapStep || 0) + Math.floor(head.x / C.WIDTH);
+          head.x = wrapX(head.x);
+          if (head.y >= C.PLAYER_MAX_Y) {
+            head.y = 2 * C.PLAYER_MAX_Y - head.y;
+            section.vertical = -1;
+            section.poisoned = false;
+            section.inPlayer = true;
+            this.state.lowerReached = true;
+          } else if (section.inPlayer && head.y <= C.PLAYER_MIN_Y) {
+            head.y = 2 * C.PLAYER_MIN_Y - head.y;
+            section.vertical = 1;
+          }
+        }
+        head.angle = Math.atan2(head.y - oldY, this._xDelta(head.x - oldX));
         head.dir = section.dir;
         head.vertical = section.vertical;
         head.turning = section.turning ? { ...section.turning } : null;
@@ -417,12 +479,13 @@ export class Game {
           vertical: section.vertical,
           turning: head.turning,
           angle: head.angle,
+          ...(cylinder ? { wrapStep: head.wrapStep } : {}),
         });
         for (let i = 1; i < section.links.length; i++) {
           const point = section.path[i * C.LINK_SPACING];
           if (!point) continue;
           const link = section.links[i];
-          const vx = point.x - link.x,
+          const vx = this._xDelta(point.x - link.x),
             vy = point.y - link.y;
           if (Math.abs(vx) + Math.abs(vy) > 0.001)
             link.angle = Math.atan2(vy, vx);
@@ -431,6 +494,7 @@ export class Game {
           link.dir = point.dir ?? section.dir;
           link.vertical = point.vertical ?? section.vertical;
           link.turning = point.turning ? { ...point.turning } : null;
+          if (cylinder) link.wrapStep = point.wrapStep || 0;
         }
         section.path.length = Math.min(
           section.path.length,
@@ -449,7 +513,9 @@ export class Game {
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
     const blocked = (x, y) => !!this._gearAt(x, y);
     for (let i = 0; i < steps; i++) {
-      const x = clamp(p.x + dx / steps, C.PLAYER_MIN_X, C.PLAYER_MAX_X);
+      const x = this.variant === "cylinder"
+        ? wrapX(p.x + dx / steps)
+        : clamp(p.x + dx / steps, C.PLAYER_MIN_X, C.PLAYER_MAX_X);
       if (!blocked(x, p.y)) p.x = x;
       const y = clamp(p.y + dy / steps, C.PLAYER_MIN_Y, C.PLAYER_MAX_Y);
       if (!blocked(p.x, y)) p.y = y;
@@ -469,7 +535,9 @@ export class Game {
 
     // SHOOT probes the previous hardware V position + 1, rounded by OBSTAC.
     // Convert that bottom-up row address into this top-down logical field.
-    const col = Math.floor(bullet.x / C.CELL);
+    const col = Math.floor(
+      (this.variant === "cylinder" ? wrapX(bullet.x) : bullet.x) / C.CELL,
+    );
     const row =
       C.ROWS -
       1 -
@@ -484,7 +552,7 @@ export class Game {
     }
 
     const touches = (object, width = C.SHOT_HIT_X, height = C.SHOT_HIT_Y) =>
-      Math.abs(object.x - bullet.x) < width &&
+      Math.abs(this._objectXDelta(object, bullet.x)) < width &&
       Math.abs(object.y - bullet.y) < height;
     // The ROM scans fixed moving-object slots 13, 12, then 11 through 0.
     // Sprite art, pulse length, distance and section order do not change priority.
@@ -634,6 +702,7 @@ export class Game {
           : C.CRAWLER_FIRST_PHASE_LONG,
       life: 0,
       tool: 0,
+      ...(this.variant === "cylinder" ? { entered: false } : {}),
     };
     this._event("crawler-spawn", this.state.crawler);
   }
@@ -667,6 +736,7 @@ export class Game {
         this.random() < C.DRONE_FAST_CHANCE
           ? C.DRONE_MAX_SPEED
           : C.DRONE_SPEED,
+      ...(this.variant === "cylinder" ? { entered: false } : {}),
     };
     this._event("drone-spawn", this.state.drone);
   }
@@ -687,7 +757,9 @@ export class Game {
           e.vx = e.vx ? 0 : e.dir;
         if (this.random() < 0.5) e.vy *= -1;
       }
+      const previousX = e.x;
       e.x += e.vx * speed * C.STEP;
+      this._wrapEnemy(e, previousX);
       e.y += e.vy * speed * C.STEP;
       if (e.y < minY || e.y > C.CRAWLER_MAX_Y) {
         e.y = clamp(e.y, minY, C.CRAWLER_MAX_Y);
@@ -697,12 +769,12 @@ export class Game {
         part.links.some(
           (link) =>
             Math.abs(link.y - e.y) < 0.01 &&
-            (link.x - e.x) * e.dir > 0 &&
-            (link.x - e.x) * e.dir < C.CHAIN_OVERLAP_DISTANCE,
+            -this._objectXDelta(e, link.x) * e.dir > 0 &&
+            -this._objectXDelta(e, link.x) * e.dir < C.CHAIN_OVERLAP_DISTANCE,
         ),
       );
       if (overlap) e.vy *= -1;
-      const eaten = this._gearAt(e.x, e.y);
+      const eaten = this._entering(e) ? null : this._gearAt(e.x, e.y);
       s.gears = s.gears.filter((g) => {
         if (g === eaten) {
           e.tool = 0.25;
@@ -712,7 +784,7 @@ export class Game {
         }
         return true;
       });
-      if (e.x < -10 || e.x > C.WIDTH + 10) {
+      if (this.variant !== "cylinder" && (e.x < -10 || e.x > C.WIDTH + 10)) {
         s.crawler = null;
         s.timers.crawler = C.CRAWLER_SPAWN;
       }
@@ -759,14 +831,17 @@ export class Game {
     }
     if (s.drone) {
       const e = s.drone;
+      const previousX = e.x;
       e.x += e.dir * e.speed * C.STEP;
-      const gear = this._gearAt(e.x, e.y);
+      this._wrapEnemy(e, previousX);
+      const gear = this._entering(e) ? null : this._gearAt(e.x, e.y);
       if (gear && !gear.electrified) {
         gear.electrified = true;
         this._event("electrify", { x: gear.x, y: gear.y, id: gear.id });
         this._effect("electrify", gear.x, gear.y);
       }
-      if (e.x < -12 || e.x > C.WIDTH + 12) s.drone = null;
+      if (this.variant !== "cylinder" && (e.x < -12 || e.x > C.WIDTH + 12))
+        s.drone = null;
     }
     if (s.lowerReached && s.sections.length) {
       s.timers.extraHead -= C.STEP;
@@ -831,7 +906,7 @@ export class Game {
     const s = this.state,
       p = s.player;
     const touches = (o, spider = false) => {
-      const x = Math.abs(o.x - p.x),
+      const x = Math.abs(this._objectXDelta(o, p.x)),
         y = Math.abs(o.y - p.y);
       return x < (spider ? 10 : 7) && y < 7 && x + y < (spider ? 14 : 12);
     };

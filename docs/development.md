@@ -16,6 +16,7 @@ Open **[http://localhost:5178](http://localhost:5178)**. If that port is occupie
 
 | Action | Control |
 | --- | --- |
+| Select playfield | Classic / Cylinder on the title or game-over screen |
 | Start / restart / resume | Enter, or the onscreen button |
 | Move in both axes | Trackpad or mouse; captured relative motion with no cursor edges |
 | Fire repeatedly | Hold Space or the primary pointer button |
@@ -26,7 +27,7 @@ Open **[http://localhost:5178](http://localhost:5178)**. If that port is occupie
 
 **Trackball control is the default, with sensitivity 1.5×.** Click Engage Drive or press Enter in an active browser window. Play starts after pointer capture succeeds: the cursor stays hidden and repeated swipes continue beyond screen edges. A fast flick spins the virtual ball, carrying the tool across the board while friction gradually slows it. Gentle movements aim precisely; a slow correction or opposite swipe brakes the spin. Escape or P pauses, releases the pointer and stops all momentum. Changing windows also clears input and pauses.
 
-Sensitivity and volume are beside the field and accessible while paused. Your chosen settings and personal best are saved locally; existing custom sensitivity is preserved. Keyboard movement stops immediately on release. Reaching an edge or gear stops spin into it, so reversing never has to work through accumulated overshoot.
+Sensitivity and volume are beside the field and accessible while paused. Your chosen settings and each mode's personal best are saved locally; existing custom sensitivity is preserved. Keyboard movement stops immediately on release. Solid edges and gears stop spin into them, so reversing never has to work through accumulated overshoot. In Cylinder, horizontal spin continues through the connected side edges.
 
 Pause freezes the current board and releases the pointer. A small Resume control stays in the corner; press P or Enter, or click Resume, to continue from the same position.
 
@@ -42,6 +43,7 @@ The selected reference is the original upright arcade, revision 3, Easy settings
 
 - `src/game.js`: seeded, deterministic 60 Hz gameplay; no DOM or graphics.
 - `src/constants.js`: centralized gameplay constants in logical 240 × 256 coordinates, displayed in the upright CRT’s 3:4 aspect.
+- `src/topology.js`: wrapped horizontal coordinates and shortest seam distances for Cylinder mode.
 - `src/render.js`: twin-gear conveyor units with circulating tread shoes, mounted gear artwork, cached machine backdrop and mechanical lighting/effects.
 - `src/tread-motion.js`: movement-driven wheel/tread phases retained through turns, pauses and splits.
 - `assets/machine-interior.png`: generated industrial interior; [generation prompt and provenance](background-art.md).
@@ -62,3 +64,5 @@ Focused control checks: `npm run test:inertia` verifies flick distance, friction
 Focused mechanical-art checks: `npm run test:mechanics` verifies ordinary obstacle contact, gear rotation, pause and split activation in Chrome and WebKit, with screenshots in `output/mechanics/`. Mounted gears turn as the conveyor units pass. Each unit's paired drive gears and tread shoes move together according to actual travel and freeze when paused.
 
 Bottom-row checks: `npm run test:clearance` verifies that the shooter fits below a conveyor one row above, still collides on its own row, and can move and fire correctly at the lower boundary. It also captures the compact shooter at desktop and narrow sizes. Set `GAME_URL` to test the published Pages URL.
+
+Cylinder checks: `npm run test:cylinder` exercises mode selection, separate best scores, seam movement/collisions, continuous conveyor descent and rendering in Chrome and WebKit. `?mode=cylinder` opens that variant; `?mode=classic` opens the original. Pure cylinder simulation regressions are included in `npm test`.

@@ -1,6 +1,6 @@
 # Mechapede — verification
 
-Latest checks: 2026-09-19. **84 rule, stability, mechanical-motion and trackball tests passed; all 29 general browser checks passed in Chrome and WebKit with no uncaught runtime errors.** Earlier focused mechanical-art, tread, pointer-capture and inertia checks are recorded below. Launch with `npm start`, then open [localhost:5178](http://localhost:5178).
+Latest checks: 2026-09-19. **106 rule, stability, mechanical-motion and trackball tests passed; all 29 general browser, 14 controlled pointer-capture and 12 Cylinder checks passed in each of Chrome and WebKit with no uncaught runtime errors.** Earlier focused mechanical-art, tread, clearance and inertia checks are recorded below. Launch with `npm start`, then open [localhost:5178](http://localhost:5178).
 
 | Area | Checks performed |
 | --- | --- |
@@ -76,3 +76,13 @@ The general browser suite now holds the pause button for 120 ms before releasing
 The original arcade shooter can sit one row below a horizontal centipede. The previous shooter limit y248 was halfway between Mechapede's two lowest conveyor rows (y244/y252), so both rows were within collision range. Its movement band is now y212–252, preserving the 40-pixel span and existing collision thresholds. The conveyor's top rebound row remains y212. A shorter carriage with a broader chassis fits fully inside the bottom and side edges, with a visible gap below the row above.
 
 The new overhead-pass regression failed before the fix. Afterward, all 84 unit/rule/stability tests pass, including both convoy directions/speeds, head/body clearance, same-row collisions and the strict vertical threshold. All 29 general browser and 14 controlled pointer-capture checks also passed per engine. `npm run test:clearance` passes seven focused checks in Chrome 153 and WebKit 26 at both 1280×800 and 514×683: startup, travel span, six-unit overhead passes, same-row danger, one/two-pixel upward corrections, firing into the overhead row and corner movement. Lower-board and full screenshots in `output/player-clearance/` were opened and inspected for clearance and clipping; no runtime errors occurred. The prescribed gameplay-client artwork check is in `output/compact-shooter-art/`.
+
+## Optional Cylinder mode — 2026-09-19
+
+The title and game-over screens offer Classic and Cylinder, remember the selection and retain separate best scores. Classic remains the default for a fresh visit. In Cylinder, moving objects cross the connected side edges. Unobstructed conveyor travel slopes eight logical pixels vertically per 240 horizontal pixels in either direction; the seam adds no vertical displacement. After reaching y252, the convoy slopes upward through the player region, reflecting downward again at y212. Mounted gears still trigger the existing obstacle turns.
+
+Sixteen simulation checks cover exact lap slope, both seams, bottom/top reflection, poisoned turns, wrapped gear addressing and collision windows, follower identity after splits, enemy ingress and repeated wrapping, an unobstructed 12,000-frame journey, and seeded sustained play. Six artwork checks cover articulation, short drawbars, tread phase, gear engagement and edge copies. All 106 tests passed, including the unchanged Classic regressions.
+
+`npm run test:cylinder` passed twelve groups in Chrome 153.0.8010.50 and WebKit 26.0. Browser checks confirm mode persistence, score separation, keyboard and inertial wrapping, both travel directions, collision and shooting across the seam, and exact paused pixels and wheel phases. A spinning shooter continued from x239 through x3 to x7 without losing velocity. A seam-straddling convoy changed pixels on both edges and zero pixels in the central test strip, ruling out a board-spanning connector. Screenshots of active play, both edges, pause and the complete picker at 514×683 were opened and inspected in `output/cylinder/` and `output/cylinder-art/`; the prescribed gameplay-client capture and state are in `output/cylinder-art-skill/`.
+
+All 29 general browser and fourteen controlled pointer-capture checks passed again in both engines. These browser results use automation; the actual Safari and physical-trackpad limitations above still apply. Cylinder is an intentional gameplay variant, rather than part of the original arcade reference.

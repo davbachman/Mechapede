@@ -10,6 +10,7 @@ A mechanical arcade game inspired by Centipede. Pilot a cutting tool inside a br
 
 ## Instructions for use
 
+- Choose **Classic** for solid sides or **Cylinder** for a connected left/right edge. In Cylinder, moving objects wrap horizontally and conveyors slope down one row per lap, then climb through the player region at the bottom. Each mode has its own personal best.
 - Press **Enter** or click **Engage Drive** to start and capture the pointer.
 - Move with your trackpad or mouse. Fast flicks build momentum; gentle or opposite movements brake. Adjust sensitivity beside the board.
 - Hold **Space** or the primary mouse button to fire. **WASD** and arrow keys also move the tool.

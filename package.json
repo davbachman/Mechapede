@@ -14,6 +14,7 @@
     "test:trackball": "node tests/trackball.mjs",
     "test:inertia": "node tests/inertia.mjs",
     "test:clearance": "node tests/player-clearance.mjs",
+    "test:cylinder": "node tests/cylinder-browser.mjs",
     "test:trackball-native": "node tests/lock-native.mjs"
   },
   "devDependencies": {

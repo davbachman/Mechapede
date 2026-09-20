@@ -3,6 +3,7 @@ import { C } from "./constants.js";
 import { Renderer } from "./render.js";
 import { Controls } from "./input.js";
 import { MechanicalAudio } from "./audio.js";
+import { wrappedDelta } from "./topology.js";
 const $ = (id) => document.getElementById(id);
 const storage = {
   get(key, fallback) {
@@ -36,9 +37,13 @@ window.addEventListener("pageshow", () => window.scrollTo(0, 0), {
 const suppliedSeed = params.has("seed")
   ? Number(params.get("seed")) >>> 0
   : null;
+const initialVariant =
+  (params.get("mode") ?? storage.get("variant", "classic")) === "cylinder"
+    ? "cylinder" : "classic";
+const scoreKey = (variant) => variant === "cylinder" ? "high-score-cylinder" : "high-score";
+let best = numberPref(scoreKey(initialVariant), 0, 0, 999999999);
 const canvas = $("game"),
-  game = new Game({ seed: suppliedSeed ?? Date.now() >>> 0 });
-let best = numberPref("high-score", 0, 0, 999999999);
+  game = new Game({ seed: suppliedSeed ?? Date.now() >>> 0, variant: initialVariant, highScore: best });
 const audio = new MechanicalAudio({
   muted: !!storage.get("muted", false),
   volume: numberPref("volume", 0.45, 0, 1),
@@ -289,6 +294,25 @@ async function toggleFullscreen() {
   }
 }
 $("start-btn").addEventListener("click", () => handleAction("start"));
+for (const variant of ["classic", "cylinder"]) {
+  $("variant-" + variant).addEventListener("click", () => {
+    const nextBest = numberPref(scoreKey(variant), 0, 0, 999999999);
+    if (!game.setVariant(variant, nextBest)) return;
+    best = nextBest;
+    storage.set("variant", variant);
+    const url = new URL(location.href);
+    url.searchParams.set("mode", variant);
+    history.replaceState(null, "", url);
+    input.clear();
+    renderer.particles = [];
+    renderer.labels = [];
+    accumulator = 0;
+    shownMode = "";
+    draw(0);
+    // Enter should engage the chosen mode after using the picker.
+    canvas.focus({ preventScroll: true });
+  });
+}
 $("pause-button").addEventListener("click", () => {
   handleAction("pause");
   if (game.state.mode !== "paused") canvas.focus({ preventScroll: true });
@@ -367,7 +391,9 @@ function simulate(seconds) {
           -C.PLAYER_MAX_STEP,
           Math.min(C.PLAYER_MAX_STEP, control["d" + axis]),
         );
-        const actual = game.state.player[axis] - before[axis];
+        let actual = game.state.player[axis] - before[axis];
+        if (axis === "x" && game.state.variant === "cylinder")
+          actual = wrappedDelta(actual);
         if (Math.abs(intended - actual) > 1e-7) input.spin.stopAxis(axis);
       }
     }
@@ -380,7 +406,7 @@ function updateHUD() {
   const score = s.score || 0;
   if (score > best) {
     best = score;
-    storage.set("high-score", best);
+    storage.set(scoreKey(s.variant), best);
   }
   s.highScore = Math.max(best, s.highScore || 0);
   $("score").textContent = String(score).padStart(6, "0");
@@ -421,9 +447,17 @@ function updateHUD() {
     cancelCapture();
     document.exitPointerLock();
   }
-  const overlayKey = mode + ":" + captureState + ":" + controlMode;
+  const overlayKey = mode + ":" + captureState + ":" + controlMode + ":" + s.variant;
   if (shownMode === overlayKey) return;
   shownMode = overlayKey;
+  $("variant-picker").hidden = !["title", "gameover"].includes(mode);
+  for (const variant of ["classic", "cylinder"])
+    $("variant-" + variant).setAttribute("aria-pressed", String(s.variant === variant));
+  $("variant-label").textContent = s.variant.toUpperCase() + " / MECHANICAL ARCADE";
+  $("best-label").textContent = s.variant.toUpperCase() + " BEST";
+  $("variant-description").textContent = s.variant === "cylinder"
+    ? "Sides connect. Conveyors slope one row per lap, then climb at the bottom."
+    : "Solid sides. Conveyors turn at the edges.";
   $("start-btn").disabled = captureState === "requesting";
   syncCaptureUI();
   const visible = ["title", "paused", "gameover"].includes(mode);
@@ -510,8 +544,10 @@ document.addEventListener("fullscreenchange", fitPlayfield);
 window.render_game_to_text = () => {
   const s = game.state;
   return JSON.stringify({
-    coordinates:
-      "240×256 logical pixels; origin top-left, +x right, +y down. Tool centers: x4–236/y212–252.",
+    coordinates: s.variant === "cylinder"
+      ? "240×256 logical pixels; +x right, +y down. Horizontal positions wrap modulo 240; tool y212–252. Conveyor slope: 8 pixels per 240 horizontal pixels."
+      : "240×256 logical pixels; origin top-left, +x right, +y down. Tool centers: x4–236/y212–252.",
+    variant: s.variant,
     mode: s.mode,
     score: s.score,
     highScore: s.highScore,

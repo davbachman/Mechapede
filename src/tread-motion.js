@@ -1,3 +1,5 @@
+import { wrappedDelta } from "./topology.js";
+
 const MAX_SAMPLE_TRAVEL = 16;
 
 /** Wheel and tread animation follows the simulation's displacement, not the
@@ -37,7 +39,10 @@ export class TreadMotion {
         const before = this.links.get(key);
         let travel = before?.travel ?? 0;
         if (before && state.mode === "playing") {
-          const dx = link.x - before.x;
+          const dx =
+            state.variant === "cylinder"
+              ? wrappedDelta(link.x - before.x)
+              : link.x - before.x;
           const dy = link.y - before.y;
           // A reset or debug jump must not wind the tread through the gap.
           if (Math.hypot(dx, dy) <= MAX_SAMPLE_TRAVEL) {

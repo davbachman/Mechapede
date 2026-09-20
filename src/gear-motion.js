@@ -1,4 +1,5 @@
 import { chainPoses } from "./chain-pose.js";
+import { wrappedDelta } from "./topology.js";
 
 const TAU = Math.PI * 2;
 const MAX_SAMPLE_TRAVEL = 16;
@@ -41,6 +42,8 @@ export class GearMotion {
   }
 
   update(state) {
+    const deltaX = (dx) =>
+      state.variant === "cylinder" ? wrappedDelta(dx) : dx;
     if (
       (this.state && this.state !== state) ||
       state.frame < this.frame ||
@@ -54,11 +57,11 @@ export class GearMotion {
     const capsules = [];
     const nextLinks = new Map();
     for (const section of state.sections ?? []) {
-      const posedLinks = chainPoses(section, state.gears ?? []);
+      const posedLinks = chainPoses(section, state.gears ?? [], state.variant);
       for (const link of posedLinks) {
         const key = link.id ?? link;
         const before = this.links.get(key);
-        const dx = before ? link.x - before.x : 0;
+        const dx = before ? deltaX(link.x - before.x) : 0;
         const dy = before ? link.y - before.y : 0;
         // Life resets, debug jumps and long gaps must not wind a nearby gear.
         const continuous = before && Math.hypot(dx, dy) <= MAX_SAMPLE_TRAVEL;
@@ -91,7 +94,7 @@ export class GearMotion {
       // Test each complete tread in the same round-pixel space used by its
       // artwork. A drawbar between units is not a belt and cannot drive a gear.
       for (const { x, y, ux, uy, dx, dy } of capsules) {
-        const gx = gear.x - x;
+        const gx = deltaX(gear.x - x);
         const gy = gear.y / this.pixelAspectY - y;
         const along = clamp(
           gx * ux + gy * uy,
