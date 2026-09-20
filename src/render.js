@@ -616,43 +616,43 @@ export class Renderer {
     c.save();
     c.translate(p.x, p.y);
     c.fillStyle = "#05090bcc";
-    roundRect(c, -4.7, -1.3, 9.4, 5.8, 1.2);
+    roundRect(c, -3.95, -0.7, 7.9, 3.25, 0.8);
     c.fill();
     c.fillStyle = "#45545c";
-    roundRect(c, -4.6, -1.8, 2.1, 5.7, 0.7);
+    roundRect(c, -3.9, -0.85, 1.7, 3.2, 0.5);
     c.fill();
-    roundRect(c, 2.5, -1.8, 2.1, 5.7, 0.7);
+    roundRect(c, 2.2, -0.85, 1.7, 3.2, 0.5);
     c.fill();
-    for (const x of [-3.5, 3.5])
-      for (let y = -0.8; y < 3; y += 1.1)
-        line(c, x - 0.6, y, x + 0.6, y, "#a0acaf", 0.4);
-    const gr = c.createLinearGradient(0, -4, 0, 4);
+    for (const x of [-3.05, 3.05])
+      for (let y = -0.3; y < 2; y += 0.85)
+        line(c, x - 0.5, y, x + 0.5, y, "#a0acaf", 0.35);
+    const gr = c.createLinearGradient(0, -1.6, 0, 2.2);
     gr.addColorStop(0, "#d7e2dc");
     gr.addColorStop(0.4, "#829fa7");
     gr.addColorStop(1, "#415c68");
     c.fillStyle = gr;
     c.beginPath();
-    c.moveTo(-2.9, 3.7);
-    c.lineTo(-3.1, -0.8);
-    c.lineTo(-1.7, -3.5);
-    c.lineTo(1.7, -3.5);
-    c.lineTo(3.1, -0.8);
-    c.lineTo(2.9, 3.7);
+    c.moveTo(-2.85, 2.05);
+    c.lineTo(-3.05, -0.65);
+    c.lineTo(-2.2, -1.55);
+    c.lineTo(2.2, -1.55);
+    c.lineTo(3.05, -0.65);
+    c.lineTo(2.85, 2.05);
     c.closePath();
     c.fill();
     c.strokeStyle = "#d4ded4";
-    c.lineWidth = 0.45;
+    c.lineWidth = 0.4;
     c.stroke();
     c.fillStyle = "#172e35";
-    roundRect(c, -1.6, -1.4, 3.2, 2.8, 0.6);
+    roundRect(c, -1.8, -0.8, 3.6, 1.7, 0.45);
     c.fill();
     c.fillStyle = "#ceeae5";
-    c.fillRect(-0.9, -0.8, 1.8, 0.7);
+    c.fillRect(-1.2, -0.3, 2.4, 0.55);
     c.fillStyle = "#c8b083";
-    c.fillRect(-0.9, -5.3, 1.8, 2.5);
+    c.fillRect(-0.9, -3.25, 1.8, 2);
     c.fillStyle = "#fff2bc";
-    c.fillRect(-0.6, -5.6, 1.2, 0.9);
-    line(c, -1.8, 2.6, 1.8, 2.6, "#f0bb6d", 0.7);
+    c.fillRect(-0.6, -3.5, 1.2, 0.7);
+    line(c, -1.8, 1.55, 1.8, 1.55, "#f0bb6d", 0.6);
     c.restore();
   }
   crawler(e, t) {

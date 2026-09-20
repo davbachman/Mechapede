@@ -212,7 +212,7 @@ for (const [name, type, options] of [
       s = await state();
       assert.deepEqual(
         s.player,
-        sign > 0 ? { x: 236, y: 248 } : { x: 4, y: 208 },
+        sign > 0 ? { x: 236, y: 252 } : { x: 4, y: 212 },
       );
       await delta(-sign * 2, -sign * 2);
       const reversed = (await state()).player;

@@ -511,7 +511,7 @@ window.render_game_to_text = () => {
   const s = game.state;
   return JSON.stringify({
     coordinates:
-      "240×256 logical pixels; origin top-left, +x right, +y down. Tool centers: x4–236/y208–248.",
+      "240×256 logical pixels; origin top-left, +x right, +y down. Tool centers: x4–236/y212–252.",
     mode: s.mode,
     score: s.score,
     highScore: s.highScore,

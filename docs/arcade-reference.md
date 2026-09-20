@@ -18,7 +18,7 @@ All speeds below are **logical pixels per 60 Hz simulation step**. Rendering, pa
 | System | Arcade target | Source routine |
 | --- | --- | --- |
 | Player | Two axes, no inertia; capped at 4 pixels/step per axis, with fractional input retained; mushrooms block motion | `MOVE`, `TBLMT` |
-| Player region | Original vertical coordinate 8–48 above the bottom, a 40-pixel center-travel span | `MOVE` |
+| Player region | Original vertical coordinate 8–48 above the bottom, a 40-pixel center-travel span; normalized here to centers y212–252, sharing the conveyor's bottom row | `MOVE` |
 | Shot | One projectile slot; upward speed **7**; holding fire reuses it when removed or returned, without a separate long cooldown | `SHOOT`, `RSHOT` |
 | Chain | 12 total segments; ordinary segment spacing 8 pixels; initial formation near top center | `INIT`, `CENTPC` |
 | Speeds | First wave 2; slow chain 1; fast chain and independent heads 2; the final remaining link becomes fast | `INIT`, `CENTPC`, `MOTION` |
@@ -59,6 +59,8 @@ The spider spans roughly the bottom 96 pixels initially, rather than being confi
 ## Collision and fidelity boundaries
 
 The original uses compact numerical windows, not sprite-alpha collisions. Player versus chain/flea uses `abs(dx)<7`, `abs(dy)<7`, `abs(dx)+abs(dy)<12`; spider uses horizontal `<10`, vertical `<7`, sum `<14`. Shot collision first checks the original obstacle row derived from the previous shot position, then tests the new position against spider, shared flea/scorpion, and fixed chain slots 11 down to 0. Chain/flea shot windows are horizontal `<6`, vertical `<5`; a flea already accelerated by a hit uses vertical `<7`. Spider/scorpion shot windows are horizontal `<10`, vertical `<5`. The themed artwork must remain readable around these small gameplay bounds.
+
+**Bottom-row clearance (rechecked 2026-09-19):** `MOVE` and `INIT1` put the upright shooter at V=8 at the bottom; `MOTION` places the lowest two horizontal chain rows at V=8 and V=16. `PLAY` compares those coordinates directly, rejecting vertical separations of 7 or more. Thus a shooter on the lowest row fits safely below a chain one row above, but still collides with one on its own row. Mechapede keeps its existing conveyor centers at y252/y244 and now gives the shooter the same y252 bottom center. The previous y248 limit erroneously placed it halfway between both rows. Moving its full travel band down four pixels preserves the original 40-pixel span and the collision windows; this restores relative alignment without claiming bit-exact hardware sprite placement.
 
 This is an independent browser implementation, not a ROM emulator. Source inspection established the rules above; exact POKEY randomness and every 6502 update-order detail were not experimentally reproduced. The flea threshold from 120k uses a binary shift of a packed-BCD score byte, giving 15 at 120k; Mechapede preserves that formula. Replacement-head score adjustments and extreme-score spider bounds use ordinary arithmetic rather than reproducing every decimal-mode artifact. Followers use leader-position history rather than the original per-body row comparison. Hardware sprite anchors are normalized to the new artwork's logical centers. Those are implementation approximations around the researched numerical windows and turn durations. Projectile row lookup, strict collision windows and fixed object-slot priority follow the original; chain/crawler collision with the player takes precedence over same-frame shooting.
 

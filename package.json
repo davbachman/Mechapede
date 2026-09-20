@@ -13,6 +13,7 @@
     "test:treads": "node tests/treads.mjs",
     "test:trackball": "node tests/trackball.mjs",
     "test:inertia": "node tests/inertia.mjs",
+    "test:clearance": "node tests/player-clearance.mjs",
     "test:trackball-native": "node tests/lock-native.mjs"
   },
   "devDependencies": {

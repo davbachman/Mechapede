@@ -24,7 +24,7 @@ test("seeded start and new-game restart produce the same complete field", () => 
   assert.equal(initial.lives, 3);
   assert.equal(countLinks(g), 12);
   assert.equal(initial.chainSpeed, 120);
-  assert.equal(initial.player.y, 248);
+  assert.equal(initial.player.y, 252);
   assert.ok(initial.gears.length <= 46 && initial.gears.length > 30);
   assert.equal(
     new Set(initial.gears.map((g) => `${g.col},${g.row}`)).size,
@@ -59,13 +59,13 @@ test("pause freezes exact state and resume deliberately clears pending input", (
 test("player has two axes, no momentum, a four-pixel per-axis frame cap, and bounds", () => {
   const { g, s } = laboratory();
   g.step({ dx: 100, dy: -100 });
-  assert.deepEqual(s.player, { x: 124, y: 244 });
+  assert.deepEqual(s.player, { x: 124, y: 248 });
   g.step();
-  assert.deepEqual(s.player, { x: 124, y: 244 });
+  assert.deepEqual(s.player, { x: 124, y: 248 });
   frames(g, 70, { dx: -100, dy: -100 });
-  assert.deepEqual(s.player, { x: 4, y: 208 });
+  assert.deepEqual(s.player, { x: 4, y: 212 });
   frames(g, 100, { dx: 100, dy: 100 });
-  assert.deepEqual(s.player, { x: 236, y: 248 });
+  assert.deepEqual(s.player, { x: 236, y: 252 });
 });
 
 test("player movement checks solid mounted gear tiles on each axis", () => {
@@ -77,6 +77,43 @@ test("player movement checks solid mounted gear tiles on each axis", () => {
   frames(g, 2, { dx: -4 });
   frames(g, 3, { dy: -4 });
   assert.equal(s.player.y, 220); // Can steer around the blocked tile.
+});
+
+test("the bottom-row shooter fits beneath every link on the second-lowest row", () => {
+  for (const dir of [-1, 1]) {
+    for (const speed of [C.CHAIN_SPEED, C.FAST_CHAIN_SPEED]) {
+      const { g, s, section } = laboratory({
+        count: 6, x: dir > 0 ? 92 : 156, y: 244, dir,
+      });
+      s.player.x = 124;
+      s.chainSpeed = speed;
+      for (let n = 0; n < 80 / (speed * C.STEP); n++) {
+        g.step();
+        assert.equal(s.mode, "playing", `dir=${dir}, speed=${speed}, frame=${n}`);
+      }
+      assert.equal(s.lives, 3);
+      assert.ok(section.links.every((link) => dir * (link.x - s.player.x) > 6));
+    }
+  }
+});
+
+test("a conveyor on the lowest row still hits the bottom-row shooter", () => {
+  for (const dir of [-1, 1]) {
+    const { g, s } = laboratory({ count: 6, x: dir > 0 ? 92 : 156, y: 252, dir });
+    s.player.x = 124;
+    for (let n = 0; n < 40 && s.mode === "playing"; n++) g.step();
+    assert.equal(s.mode, "dying");
+    assert.equal(s.lives, 2);
+  }
+});
+
+test("moving up into the second-lowest row retains the original strict collision window", () => {
+  for (const clearance of [8, 7, 6, 0]) {
+    const { g, s } = laboratory({ count: 1, x: 124, y: 244 });
+    s.player = { x: 124, y: 244 + clearance };
+    g._checkPlayerCollision();
+    assert.equal(s.mode, clearance >= 7 ? "playing" : "dying");
+  }
 });
 
 test("one cutting pulse travels seven pixels per frame; holding fire repeats after slot frees", () => {
@@ -308,8 +345,8 @@ test("destroying the last link transitions through the wave delay and preserves 
 });
 
 test("chain contact destroys the player before a coincident shot can save them", () => {
-  const { g, s } = laboratory({ count: 1, x: 120, y: 244 });
-  s.bullet = { x: 120, y: 248 };
+  const { g, s } = laboratory({ count: 1, x: 120, y: 252 });
+  s.bullet = { x: 120, y: 256 };
   g.step({ fire: true });
   assert.equal(s.mode, "dying");
   assert.equal(s.lives, 2);

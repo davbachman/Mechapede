@@ -361,7 +361,7 @@ export class Game {
       this.state.lowerReached = true;
       if (section.links.length > 1 && section.links.at(-1).y >= 252)
         this._releaseTail(section);
-    } else if (section.inPlayer && head.y <= C.PLAYER_MIN_Y + 4)
+    } else if (section.inPlayer && head.y <= C.PLAYER_MIN_Y)
       section.vertical = 1;
     if (section.poisoned) section.vertical = 1;
     section.turning = { progress: 0 };
@@ -974,7 +974,7 @@ export class Game {
           electrified: n % 4 === 0,
         });
       this.debug("enemy", { type: "crawler", x: 190, y: 216 });
-      s.player = { x: 120, y: 248 };
+      s.player = { x: 120, y: C.PLAYER_MAX_Y };
     } else if (name === "poison") {
       this.debug("section", { count: 6, x: 100, y: 100 });
       this.debug("gear", { col: 13, row: 12, electrified: true });

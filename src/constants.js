@@ -10,8 +10,9 @@ export const C = Object.freeze({
   STEP: 1 / 60,
   PLAYER_MIN_X: 4,
   PLAYER_MAX_X: 236,
-  PLAYER_MIN_Y: 208,
-  PLAYER_MAX_Y: 248,
+  // Share the conveyor's bottom-row center; retain the arcade's 40px travel span.
+  PLAYER_MIN_Y: 212,
+  PLAYER_MAX_Y: 252,
   PLAYER_RADIUS: 3,
   PLAYER_SPEED: 240,
   PLAYER_MAX_STEP: 4,
