@@ -1,6 +1,6 @@
 # Mechapede — development and local play
 
-A complete, single-player mechanical arcade game inspired by Atari's **Centipede upright arcade**. Cut through a convoy of compact conveyor units and mounted gears while runaway maintenance machines invade the field. Each unit has two rotating gears inside a moving tank tread, and any surviving unit can become the amber leader.
+A single-player arcade game inside a broken machine. Cut through a convoy of compact conveyor units and mounted gears while runaway maintenance machines invade the field. Each unit has two rotating gears inside a moving tank tread, and any surviving unit can become the amber leader.
 
 ## Play locally
 
@@ -16,7 +16,6 @@ Open **[http://localhost:5178](http://localhost:5178)**. If that port is occupie
 
 | Action | Control |
 | --- | --- |
-| Select playfield | Classic / Cylinder on the title or game-over screen |
 | Start / restart / resume | Enter, or the onscreen button |
 | Move in both axes | Trackpad or mouse; captured relative motion with no cursor edges |
 | Fire repeatedly | Hold Space or the primary pointer button |
@@ -27,23 +26,32 @@ Open **[http://localhost:5178](http://localhost:5178)**. If that port is occupie
 
 **Trackball control is the default, with sensitivity 1.5×.** Click Engage Drive or press Enter in an active browser window. Play starts after pointer capture succeeds: the cursor stays hidden and repeated swipes continue beyond screen edges. A fast flick spins the virtual ball, carrying the tool across the board while friction gradually slows it. Gentle movements aim precisely; a slow correction or opposite swipe brakes the spin. Escape or P pauses, releases the pointer and stops all momentum. Changing windows also clears input and pauses.
 
-Sensitivity and volume are beside the field and accessible while paused. Your chosen settings and each mode's personal best are saved locally; existing custom sensitivity is preserved. Keyboard movement stops immediately on release. Solid edges and gears stop spin into them, so reversing never has to work through accumulated overshoot. In Cylinder, horizontal spin continues through the connected side edges.
+Sensitivity and volume are beside the field and accessible while paused. Your chosen settings and the current ruleset’s personal best are saved locally; existing custom sensitivity is preserved. Keyboard movement stops immediately on release. The top and bottom of the shooter region and mounted gears stop spin into them. Horizontal spin continues through the connected side edges.
 
 Pause freezes the current board and releases the pointer. A small Resume control stays in the corner; press P or Enter, or click Resume, to continue from the same position.
 
 If capture is declined, the game stays paused and offers Retry or **Use Window / Keyboard Controls**. For full trackball behavior on a Mac, use Chrome with its window active. Window controls track motion across the whole page, but remain limited by the screen/browser edges; leaving the window pauses safely. You can switch back with Enable Trackball. The game remains playable without Pointer Lock through this explicit fallback.
 
-## Arcade rules
+## Current rules
 
-Three starting tools; an extra tool every 12,000 points, up to six spares plus the active tool. A leading link scores 100, a body link 10. Each gear takes four shots and scores 1 when removed. The crawler scores 300/600/900 depending on proximity; the dispenser scores 200 and takes two hits; the welding drone scores 1,000. Electrified gears disrupt a chain's steering. Gears persist between waves and are repaired after a lost tool.
+The left and right edges connect. Conveyors descend eight logical pixels per full 240px lap, wrap without a height jump, and slope upward again at the bottom of the shooter region. Gear encounters retain the diagonal U-turn and row change; the proposed reversal-only behavior was cancelled.
 
-The selected reference is the original upright arcade, revision 3, Easy settings. [Arcade reference and numerical constants](arcade-reference.md) distinguish confirmed rules from implementation limits. [Verification report](verification.md) records tests and browser limitations. Physical trackpad feel still needs your laptop playtesting.
+Three starting tools; an extra tool every 12,000 points, up to six spares plus the active tool. A leading unit scores 100, a following unit 10. Mounted gears take four shots and score 1 when removed. Gears persist between waves and repair after losing a tool. The parts dispenser takes two hits and scores 200.
+
+The maintenance gantry replaces the crawler. Its rail is at y204, above the shooter’s y212–252 region. A carriage moves at 84px/s, locks a column and warns for 0.85s before extending a piston to the floor. Both shaft and foot are dangerous until retracted. A shot interrupts the stroke; three hits destroy the carriage for 600 points. It first arrives after 3.5s and returns 6s after destruction.
+
+The runaway flywheel replaces the welding drone. It enters diagonally from above after 9s, with 45–70px/s horizontal speed and 86px/s² downward gravity. Swept circular contact uses the displayed pixel aspect and a restitution of 0.82: the normal velocity rebounds with energy loss while tangential velocity is retained. Top impacts can launch a rising arc before gravity pulls the wheel down again. Each struck gear immediately leaves the mounted field, tumbles under gravity through the shooter region, and falls offscreen. Flywheels and loose gears wrap horizontally and can hit the shooter. One pulse destroys a flywheel for 1,000 or loose gear for 1 point. Another wheel arrives 12s after destruction or departure. It no longer shares the dispenser’s spawn slot.
+
+Classic’s last playable implementation is preserved in Git at tag `archive/classic-2026-09-21` (commit `93d9b1b`). It is absent from the current mode selector and legacy `?mode=classic` URLs use the current game. Previous best scores remain in storage; the new ruleset uses `chain-drive.high-score-machinery`. Electrical steering remains supported for historical deterministic scenarios, but the current enemy cast no longer electrifies gears.
+
+[Historical arcade reference](arcade-reference.md) documents the original research. [Verification report](verification.md) records current checks and browser limitations. Physical trackpad feel still needs laptop playtesting.
 
 ## Source and verification
 
 - `src/game.js`: seeded, deterministic 60 Hz gameplay; no DOM or graphics.
 - `src/constants.js`: centralized gameplay constants in logical 240 × 256 coordinates, displayed in the upright CRT’s 3:4 aspect.
-- `src/topology.js`: wrapped horizontal coordinates and shortest seam distances for Cylinder mode.
+- `src/topology.js`: wrapped horizontal coordinates and shortest seam distances.
+- `src/gantry.js` and `src/round-hazards.js`: shared piston geometry, circular swept contact and projectile collision.
 - `src/render.js`: twin-gear conveyor units with circulating tread shoes, mounted gear artwork, cached machine backdrop and mechanical lighting/effects.
 - `src/tread-motion.js`: movement-driven wheel/tread phases retained through turns, pauses and splits.
 - `assets/machine-interior.png`: generated industrial interior; [generation prompt and provenance](background-art.md).
@@ -65,4 +73,6 @@ Focused mechanical-art checks: `npm run test:mechanics` verifies ordinary obstac
 
 Bottom-row checks: `npm run test:clearance` verifies that the shooter fits below a conveyor one row above, still collides on its own row, and can move and fire correctly at the lower boundary. It also captures the compact shooter at desktop and narrow sizes. Set `GAME_URL` to test the published Pages URL.
 
-Cylinder checks: `npm run test:cylinder` exercises mode selection, separate best scores, seam movement/collisions, continuous conveyor descent and rendering in Chrome and WebKit. `?mode=cylinder` opens that variant; `?mode=classic` opens the original. Pure cylinder simulation regressions are included in `npm test`.
+Connected-field checks: `npm run test:cylinder` verifies the archived selector, score persistence, seam movement/collisions, continuous conveyor descent and rendering in Chrome and WebKit. Legacy mode URLs cannot re-enable Classic.
+
+New machinery checks: `npm run test:machinery` exercises gantry warnings/strikes/shot interruptions, gravitational flywheel rebounds, falling debris, scoring, round artwork, exact pause pixels and narrow layouts in Chrome and WebKit. Pure physics and lifecycle regressions are included in `npm test`.

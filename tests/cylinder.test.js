@@ -30,24 +30,18 @@ test("cylinder topology preserves interior coordinates and gives shortest signed
   assert.equal(wrappedDelta(722), 2);
 });
 
-test("variants default to classic, switch only outside a game, and retain separate supplied bests on restart", () => {
-  const game = new Game({ highScore: 500 });
-  assert.equal(game.state.variant, "classic");
-  assert.equal(game.setVariant("cylinder", 700), true);
-  assert.equal(game.state.mode, "title");
-  assert.equal(game.state.highScore, 700);
-  game.start();
-  assert.equal(game.state.variant, "cylinder");
-  assert.equal(game.setVariant("classic", 500), false);
-  game.pause();
-  assert.equal(game.setVariant("classic", 500), false);
-  game.start();
-  assert.equal(game.state.variant, "cylinder");
-  assert.equal(game.state.highScore, 700);
-  game.state.mode = "gameover";
-  assert.equal(game.setVariant("classic", 500), true);
-  assert.equal(game.state.highScore, 500);
-  assert.equal(game.state.variant, "classic");
+test("the archived Classic selector cannot start a different ruleset", () => {
+  for (const variant of [undefined, "classic", "cylinder"]) {
+    const game = new Game({ variant, highScore: 500 });
+    game.start();
+    assert.equal(game.state.variant, "cylinder");
+    assert.equal(game.setVariant, undefined);
+    game.state.player.x = 239;
+    game.step({ dx: 4 });
+    assert.equal(game.state.player.x, 3);
+    assert.equal(game.state.highScore, 500);
+    assert.equal("crawler" in game.state, false);
+  }
 });
 
 for (const dir of [-1, 1]) {
@@ -202,40 +196,6 @@ test("cylinder collision and bullet windows cross the seam and retain strict one
     assert.equal(bulletCase.state.bullet, null);
     assert.equal(bulletCase.state.score, C.HEAD_SCORE);
   }
-});
-
-test("cylinder crawler and drone retain identities and wrap in either direction after ingress", () => {
-  for (const type of ["crawler", "drone"]) for (const dir of [-1, 1]) {
-    const { game, state } = laboratory();
-    const enemy = game.debug("enemy", { type, x: dir > 0 ? 239 : 0, y: 180, dir, vx: dir, vy: 0, speed: 120, phase: 100 });
-    const id = enemy.id;
-    game.step();
-    assert.equal(state[type].id, id);
-    assert.equal(enemy.x, dir > 0 ? 1 : 238);
-    assert.equal(enemy.entered, true);
-    frames(game, 240);
-    assert.equal(state[type].id, id);
-    assert.ok(enemy.x >= 0 && enemy.x < 240);
-    game.debug("hitEnemy", { type });
-    assert.equal(state[type], null);
-  }
-});
-
-test("offscreen cylinder enemy ingress stays on the original edge and cannot act through the seam", () => {
-  const { game, state } = laboratory();
-  const gear = game.debug("gear", { col: 29, row: 22 });
-  const crawler = game.debug("enemy", { type: "crawler", x: -8, y: 180, dir: 1, vx: 1, vy: 0, speed: 60, phase: 100 });
-  game.step();
-  assert.equal(crawler.x, -7);
-  assert.equal(crawler.entered, false);
-  assert.ok(state.gears.includes(gear));
-  state.bullet = { x: 234, y: 187 };
-  game._moveBullet();
-  assert.equal(state.crawler, crawler);
-  state.bullet = null;
-  frames(game, 7);
-  assert.equal(crawler.x, 0);
-  assert.equal(crawler.entered, true);
 });
 
 test("cylinder simulation remains seeded, finite, bounded and identity-stable through sustained play", () => {

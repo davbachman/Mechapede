@@ -30,7 +30,7 @@ test("ten seeded ten-minute runs keep geometry, entity identity and enemy slots 
       const s = game.state,
         links = s.sections.flatMap((section) => section.links);
       assert.ok(Number.isFinite(s.player.x) && Number.isFinite(s.player.y));
-      assert.ok(s.player.x >= C.PLAYER_MIN_X && s.player.x <= C.PLAYER_MAX_X);
+      assert.ok(s.player.x >= 0 && s.player.x < C.WIDTH);
       assert.ok(s.player.y >= C.PLAYER_MIN_Y && s.player.y <= C.PLAYER_MAX_Y);
       assert.ok(
         links.length <= C.CHAIN_LENGTH,
@@ -56,7 +56,22 @@ test("ten seeded ten-minute runs keep geometry, entity identity and enemy slots 
         s.gears.length,
       );
       assert.ok(s.gears.every((g) => g.hp >= 1 && g.hp <= 4));
-      assert.ok(!(s.dispenser && s.drone));
+      assert.equal("drone" in s, false);
+      const debrisIds = s.fallingGears.map(e => e.id);
+      assert.equal(new Set(debrisIds).size, debrisIds.length);
+      assert.ok(s.gears.every(g => !debrisIds.includes(g.id)));
+      for (const e of [...s.fallingGears, ...(s.flywheel ? [s.flywheel] : [])]) {
+        assert.ok([e.x, e.y, e.vx, e.vy, e.angle].every(Number.isFinite));
+        assert.ok(e.x >= 0 && e.x < C.WIDTH);
+        assert.ok(e.y < C.HEIGHT + C.FLYWHEEL_RADIUS);
+      }
+      assert.equal("crawler" in s, false);
+      if (s.gantry) {
+        assert.equal(s.gantry.y, C.GANTRY_Y);
+        assert.ok(s.gantry.extension >= 0 && s.gantry.extension <= C.GANTRY_REACH);
+        assert.ok(s.gantry.hp > 0 && s.gantry.hp <= C.GANTRY_HP);
+        assert.ok(s.gantry.extension === 0 || s.gantry.phase !== "travel");
+      }
       assert.ok(
         Number.isInteger(s.score) && s.score >= 0 && s.highScore >= s.score,
       );

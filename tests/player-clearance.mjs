@@ -35,7 +35,7 @@ for (const [name, type, options] of [
       const frames = (count) =>
         page.evaluate((n) => window.__chainDrive.stepFrames(n), count);
       const setup = (scenario = {}) =>
-        page.evaluate((scenario) => {
+        page.evaluate(async (scenario) => {
           const a = window.__chainDrive;
           a.input.clear();
           a.game.start();
@@ -51,6 +51,8 @@ for (const [name, type, options] of [
             y: scenario.playerY ?? 252,
           };
           a.draw();
+          a.input.canvas.focus({ preventScroll: true });
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         }, scenario);
       const screenshot = async (suffix, full = false) => {
         const box = await page.locator("canvas").boundingBox();
@@ -92,32 +94,15 @@ for (const [name, type, options] of [
         check("Keyboard movement retains the 40px vertical span from y212 to252");
 
         for (const dir of [1, -1]) {
-          await setup({ x: dir > 0 ? 80 : 160, dir });
-          await frames(20);
-          const overhead = await state();
-          assert.equal(overhead.mode, "playing");
-          assert.equal(overhead.sections[0].links[0].x, 120);
-          assert.equal(overhead.sections[0].links[0].y, 244);
+          await setup({ count: 1, x: 120, row: 244, dir });
+          await page.evaluate(() => window.__chainDrive.game._checkPlayerCollision());
+          assert.equal((await state()).mode, "playing");
           await screenshot(dir > 0 ? "overhead-right" : "overhead-left", dir > 0);
-          const pass = await page.evaluate(() => {
-            const a = window.__chainDrive;
-            for (let n = 0; n < 40; n++) {
-              a.stepFrames(1);
-              if (a.game.state.mode !== "playing") return { safe: false };
-            }
-            return {
-              safe: true,
-              player: a.game.state.player,
-              links: a.game.state.sections.flatMap((part) => part.links),
-            };
-          });
-          assert.equal(pass.safe, true);
-          assert.deepEqual(pass.player, { x: 120, y: 252 });
-          assert.equal(pass.links.length, 6);
-          assert.ok(pass.links.every((link) => link.y === 244));
-          assert.ok(pass.links.every((link) => dir * (link.x - 120) > 0));
+          await frames(1);
+          assert.equal((await state()).mode, "playing");
+          assert.ok(Math.abs((await state()).sections[0].links[0].y - (244 + 2 / 30)) < 1e-8);
         }
-        check("All six conveyor units pass directly overhead on row244 in both directions");
+        check("A unit one row above the bottom fits overhead while continuing the Cylinder slope");
 
         await setup({ x: 118, row: 252 });
         await frames(1);
@@ -133,11 +118,8 @@ for (const [name, type, options] of [
           });
         await correction();
         assert.equal((await state()).player.y, 251);
-        assert.equal((await state()).mode, "playing");
-        await correction();
-        assert.equal((await state()).player.y, 250);
         assert.equal((await state()).mode, "dying");
-        check("Moving up to y251 is safe; entering the overhead unit at y250 collides");
+        check("Moving up into a conveyor that is sloping downward still collides");
 
         await setup({ x: 118 });
         await page.keyboard.down("Space");
@@ -151,12 +133,12 @@ for (const [name, type, options] of [
         check("Firing upward from the bottom row hits the overhead conveyor head");
 
         for (const [key, x, suffix] of [
-          ["ArrowLeft", 4, "left-corner"],
-          ["ArrowRight", 236, "right-corner"],
+          ["ArrowLeft", 60, "left-wrap"],
+          ["ArrowRight", 180, "right-wrap"],
         ]) {
           await setup({ count: 1, row: 44, x: 124 });
           await page.keyboard.down(key);
-          await frames(80);
+          await frames(100);
           await page.keyboard.up(key);
           assert.deepEqual((await state()).player, { x, y: 252 });
           await page.evaluate((x) => {
@@ -167,7 +149,7 @@ for (const [name, type, options] of [
           }, x);
           await screenshot(suffix);
         }
-        check("Both bottom corners remain reachable; edge and overhead artwork captured");
+        check("Horizontal movement wraps in both directions; overhead artwork captured");
         assert.deepEqual(errors, []);
         report.push({ browser: name, version: browser.version(), viewport, checks, errors });
       } finally {

@@ -1,12 +1,14 @@
 import { C, clamp } from "./constants.js";
 import { wrapX, wrappedDelta } from "./topology.js";
+import { pistonTouches, gantryFootY } from "./gantry.js";
+import { ROUND_Y, sweepCircle, roundTouchesRect, shotHitsRound } from "./round-hazards.js";
 
 /** Seeded, rendering-independent arcade simulation. All authoritative movement runs
  * at 60 Hz. dx/dy are relative logical-pixel displacements, not velocities.
  * Public state is intentionally inspectable. debug() builds deterministic scenarios. */
 export class Game {
-  constructor({ seed = 0xc4a1d, highScore = 0, variant = "classic" } = {}) {
-    this.variant = variant === "cylinder" ? "cylinder" : "classic";
+  constructor({ seed = 0xc4a1d, highScore = 0 } = {}) {
+    this.variant = "cylinder";
     this.seed = seed >>> 0;
     this.rng = this.seed;
     this.nextId = 1;
@@ -30,15 +32,16 @@ export class Game {
       gears: [],
       sections: [],
       bullet: null,
-      crawler: null,
+      gantry: null,
       dispenser: null,
-      drone: null,
+      flywheel: null,
+      fallingGears: [],
       effects: [],
       timer: 0,
       timers: {
-        crawler: C.CRAWLER_SPAWN,
+        gantry: C.GANTRY_SPAWN,
         dispenser: C.DISPENSER_DELAY,
-        drone: C.DRONE_SPAWN,
+        flywheel: C.FLYWHEEL_SPAWN,
         extraHead: C.EXTRA_HEAD_DELAY,
       },
       nextLife: C.EXTRA_LIFE_SCORE,
@@ -82,27 +85,17 @@ export class Game {
   inspect() {
     return JSON.parse(JSON.stringify(this.state));
   }
-  setVariant(variant, highScore = 0) {
-    if (!["title", "gameover"].includes(this.state.mode)) return false;
-    this.variant = variant === "cylinder" ? "cylinder" : "classic";
-    this.state = this._empty(Math.max(0, Number(highScore) || 0));
-    this.accumulator = 0;
-    this.pendingInput = { dx: 0, dy: 0, fire: false };
-    this.events = [];
-    return true;
-  }
   _xDelta(dx) {
-    return this.variant === "cylinder" ? wrappedDelta(dx) : dx;
+    return wrappedDelta(dx);
   }
   _entering(object) {
-    return this.variant === "cylinder" && object.entered === false &&
+    return object.entered === false &&
       (object.x < 0 || object.x >= C.WIDTH);
   }
   _objectXDelta(object, x) {
     return this._entering(object) ? object.x - x : this._xDelta(object.x - x);
   }
   _wrapEnemy(enemy, previousX) {
-    if (this.variant !== "cylinder") return;
     if (enemy.entered ||
       (previousX >= 0 && previousX < C.WIDTH) ||
       (enemy.x >= 0 && enemy.x < C.WIDTH)) {
@@ -240,9 +233,7 @@ export class Game {
     }
   }
   _addGear(col, row, effect = true) {
-    col = this.variant === "cylinder"
-      ? wrapX(Math.floor(col), C.COLS)
-      : clamp(Math.floor(col), 0, C.COLS - 1);
+    col = wrapX(Math.floor(col), C.COLS);
     row = clamp(Math.floor(row), 0, C.ROWS - 1);
     if (row === 0 || row >= C.ROWS - 2) return null;
     let gear = this.state.gears.find((g) => g.col === col && g.row === row);
@@ -265,7 +256,7 @@ export class Game {
     return gear;
   }
   _gearAt(x, y) {
-    if (this.variant === "cylinder") x = wrapX(x);
+    x = wrapX(x);
     const col = Math.floor(x / C.CELL),
       row = Math.floor(y / C.CELL);
     return this.state.gears.find((g) => g.col === col && g.row === row);
@@ -273,13 +264,12 @@ export class Game {
   _makeSection(count, x, y, dir = 1, options = {}) {
     const links = [];
     const path = [];
-    const cylinder = this.variant === "cylinder";
     for (let n = 0; n <= (count + 1) * C.LINK_SPACING; n++) {
       const rawX = x - dir * n;
       path.push({
-        x: cylinder ? wrapX(rawX) : rawX,
+        x: wrapX(rawX),
         y, dir, vertical: 1, turning: null,
-        ...(cylinder ? { wrapStep: Math.floor(rawX / C.WIDTH) } : {}),
+        wrapStep: Math.floor(rawX / C.WIDTH),
       });
     }
     const occupied = new Set(
@@ -307,7 +297,7 @@ export class Game {
         dir,
         vertical: 1,
         turning: null,
-        ...(cylinder ? { wrapStep: path[n * C.LINK_SPACING].wrapStep } : {}),
+        wrapStep: path[n * C.LINK_SPACING].wrapStep,
       });
     }
     return {
@@ -322,7 +312,7 @@ export class Game {
       inPlayer: false,
       tailReleased: false,
       added: false,
-      ...(cylinder ? { variant: "cylinder" } : {}),
+      variant: "cylinder",
       ...options,
     };
   }
@@ -350,11 +340,12 @@ export class Game {
     }
     if (resetEnemies) {
       s.bullet = null;
-      s.crawler = s.dispenser = s.drone = null;
+      s.gantry = s.dispenser = s.flywheel = null;
+      s.fallingGears = [];
       s.timers = {
-        crawler: C.CRAWLER_SPAWN,
+        gantry: C.GANTRY_SPAWN,
         dispenser: C.DISPENSER_DELAY,
-        drone: C.DRONE_SPAWN,
+        flywheel: C.FLYWHEEL_SPAWN,
         extraHead: s.timers.extraHead,
       };
     }
@@ -372,9 +363,6 @@ export class Game {
     const head = section.links[0];
     if (head.y >= 252 && !section.poisoned) this.state.lowerReached = true;
     const gear = this._gearAt(head.x + section.dir * C.CELL, head.y);
-    const boundary =
-      this.variant !== "cylinder" &&
-      ((head.x <= 4 && section.dir < 0) || (head.x >= 236 && section.dir > 0));
     const overlap = this.state.sections.some((other) =>
       other.links.some(
         (link) =>
@@ -397,7 +385,7 @@ export class Game {
         section.poisoned = true;
       }
     }
-    if (!section.poisoned && !boundary && !gear && !overlap) return;
+    if (!section.poisoned && !gear && !overlap) return;
     if (head.y >= 252) {
       section.vertical = -1;
       section.poisoned = false;
@@ -432,7 +420,6 @@ export class Game {
     this.state.sections.push(solo);
   }
   _moveChains() {
-    const cylinder = this.variant === "cylinder";
     for (const section of [...this.state.sections]) {
       if (!section.links.length) continue;
       const distance = this._speed(section) * C.STEP;
@@ -450,23 +437,21 @@ export class Game {
             section.turning = null;
             section.holdRow = false;
           }
-        } else if (cylinder) {
+        } else {
           // One row per horizontal circuit, with no vertical jump at the seam.
           head.y += section.vertical * C.CELL / C.WIDTH;
         }
-        if (cylinder) {
-          head.wrapStep = (head.wrapStep || 0) + Math.floor(head.x / C.WIDTH);
-          head.x = wrapX(head.x);
-          if (head.y >= C.PLAYER_MAX_Y) {
-            head.y = 2 * C.PLAYER_MAX_Y - head.y;
-            section.vertical = -1;
-            section.poisoned = false;
-            section.inPlayer = true;
-            this.state.lowerReached = true;
-          } else if (section.inPlayer && head.y <= C.PLAYER_MIN_Y) {
-            head.y = 2 * C.PLAYER_MIN_Y - head.y;
-            section.vertical = 1;
-          }
+        head.wrapStep = (head.wrapStep || 0) + Math.floor(head.x / C.WIDTH);
+        head.x = wrapX(head.x);
+        if (head.y >= C.PLAYER_MAX_Y) {
+          head.y = 2 * C.PLAYER_MAX_Y - head.y;
+          section.vertical = -1;
+          section.poisoned = false;
+          section.inPlayer = true;
+          this.state.lowerReached = true;
+        } else if (section.inPlayer && head.y <= C.PLAYER_MIN_Y) {
+          head.y = 2 * C.PLAYER_MIN_Y - head.y;
+          section.vertical = 1;
         }
         head.angle = Math.atan2(head.y - oldY, this._xDelta(head.x - oldX));
         head.dir = section.dir;
@@ -479,7 +464,7 @@ export class Game {
           vertical: section.vertical,
           turning: head.turning,
           angle: head.angle,
-          ...(cylinder ? { wrapStep: head.wrapStep } : {}),
+          wrapStep: head.wrapStep,
         });
         for (let i = 1; i < section.links.length; i++) {
           const point = section.path[i * C.LINK_SPACING];
@@ -494,7 +479,7 @@ export class Game {
           link.dir = point.dir ?? section.dir;
           link.vertical = point.vertical ?? section.vertical;
           link.turning = point.turning ? { ...point.turning } : null;
-          if (cylinder) link.wrapStep = point.wrapStep || 0;
+          link.wrapStep = point.wrapStep || 0;
         }
         section.path.length = Math.min(
           section.path.length,
@@ -513,9 +498,7 @@ export class Game {
     const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
     const blocked = (x, y) => !!this._gearAt(x, y);
     for (let i = 0; i < steps; i++) {
-      const x = this.variant === "cylinder"
-        ? wrapX(p.x + dx / steps)
-        : clamp(p.x + dx / steps, C.PLAYER_MIN_X, C.PLAYER_MAX_X);
+      const x = wrapX(p.x + dx / steps);
       if (!blocked(x, p.y)) p.x = x;
       const y = clamp(p.y + dy / steps, C.PLAYER_MIN_Y, C.PLAYER_MAX_Y);
       if (!blocked(p.x, y)) p.y = y;
@@ -536,7 +519,7 @@ export class Game {
     // SHOOT probes the previous hardware V position + 1, rounded by OBSTAC.
     // Convert that bottom-up row address into this top-down logical field.
     const col = Math.floor(
-      (this.variant === "cylinder" ? wrapX(bullet.x) : bullet.x) / C.CELL,
+      wrapX(bullet.x) / C.CELL,
     );
     const row =
       C.ROWS -
@@ -554,12 +537,28 @@ export class Game {
     const touches = (object, width = C.SHOT_HIT_X, height = C.SHOT_HIT_Y) =>
       Math.abs(this._objectXDelta(object, bullet.x)) < width &&
       Math.abs(object.y - bullet.y) < height;
-    // The ROM scans fixed moving-object slots 13, 12, then 11 through 0.
-    // Sprite art, pulse length, distance and section order do not change priority.
-    if (s.crawler && touches(s.crawler, C.SHOT_WIDE_HIT_X)) {
+    const debris = s.fallingGears.find(e => shotHitsRound(e, C.FALLING_GEAR_RADIUS,
+      bullet.x, previousY, bullet.y));
+    if (debris) {
       s.bullet = null;
-      this._hitEnemy("crawler");
+      s.fallingGears = s.fallingGears.filter(e => e !== debris);
+      this._score(C.GEAR_SCORE, debris.x, debris.y);
+      this._effect("gear-destroy", debris.x, debris.y);
+      this._event("gear-destroy", { x: debris.x, y: debris.y });
       return;
+    }
+    const gantry = s.gantry;
+    if (gantry && !this._entering(gantry)) {
+      const dx = Math.abs(this._xDelta(gantry.x - bullet.x));
+      const bodyHit = dx < C.GANTRY_HALF_WIDTH + 0.65 &&
+        bullet.y <= C.GANTRY_Y + 4 && previousY >= C.GANTRY_Y - 4;
+      const pistonHit = pistonTouches(gantry, bullet.x, (bullet.y + previousY) / 2,
+        0.65, (previousY - bullet.y) / 2);
+      if (bodyHit || pistonHit) {
+        s.bullet = null;
+        this._hitEnemy("gantry");
+        return;
+      }
     }
     if (
       s.dispenser &&
@@ -575,9 +574,10 @@ export class Game {
       this._hitEnemy("dispenser");
       return;
     }
-    if (s.drone && touches(s.drone, C.SHOT_WIDE_HIT_X)) {
+    if (s.flywheel && !this._entering(s.flywheel) &&
+      shotHitsRound(s.flywheel, C.FLYWHEEL_RADIUS, bullet.x, previousY, bullet.y)) {
       s.bullet = null;
-      this._hitEnemy("drone");
+      this._hitEnemy("flywheel");
       return;
     }
     const slots = s.sections
@@ -667,44 +667,61 @@ export class Game {
     }
   }
 
-  _crawlerMinY() {
-    return (
-      C.CRAWLER_MIN_Y +
-      Math.min(
-        C.CRAWLER_MAX_RESTRICTION_ROWS,
-        Math.max(
-          0,
-          Math.floor(
-            (this.state.score - C.ENEMY_FAST_SCORE) / C.DIFFICULTY_SCORE_STEP,
-          ),
-        ),
-      ) *
-        C.CELL
-    );
-  }
-  _spawnCrawler() {
+  _spawnGantry() {
     const dir = this.random() < 0.5 ? 1 : -1;
-    const minY = this._crawlerMinY();
-    this.state.crawler = {
-      id: this._id(),
-      x: dir > 0 ? -8 : C.WIDTH + 8,
-      y: minY,
-      dir,
-      vx: dir,
-      vy: this.random() < 0.5 ? -1 : 1,
-      speed:
-        this.state.score >= C.CRAWLER_FAST_SCORE
-          ? C.CRAWLER_FAST_SPEED
-          : C.CRAWLER_SLOW_SPEED,
-      phase:
-        this.random() < 0.5
-          ? C.CRAWLER_FIRST_PHASE_SHORT
-          : C.CRAWLER_FIRST_PHASE_LONG,
-      life: 0,
-      tool: 0,
-      ...(this.variant === "cylinder" ? { entered: false } : {}),
+    this.state.gantry = {
+      id: this._id(), x: dir > 0 ? -10 : C.WIDTH + 10, y: C.GANTRY_Y,
+      dir, entered: false, hp: C.GANTRY_HP, phase: "travel", age: 0,
+      extension: 0, flash: 0,
     };
-    this._event("crawler-spawn", this.state.crawler);
+    this._event("gantry-spawn", this.state.gantry);
+  }
+  _moveGantry() {
+    const s = this.state;
+    if (!s.gantry) {
+      s.timers.gantry -= C.STEP;
+      if (s.timers.gantry <= 0) this._spawnGantry();
+      return;
+    }
+    const e = s.gantry;
+    e.age += C.STEP;
+    e.flash = Math.max(0, e.flash - C.STEP);
+    const phase = name => { e.phase = name; e.age = 0; };
+    if (e.phase === "travel") {
+      const oldX = e.x;
+      e.x += e.dir * C.GANTRY_SPEED * C.STEP;
+      this._wrapEnemy(e, oldX);
+      // Approach the player's lane, then lock the strike position for its entire cycle.
+      if (e.entered && e.age >= 0.8 &&
+        (Math.abs(this._xDelta(e.x - s.player.x)) < 10 || e.age >= 2.6)) {
+        phase("warning");
+        this._event("gantry-warning", { x: e.x, y: e.y });
+      }
+    } else if (e.phase === "warning" && e.age + 1e-9 >= C.GANTRY_WARNING) {
+      phase("extend");
+      this._event("gantry-strike", { x: e.x, y: e.y });
+    } else if (e.phase === "extend") {
+      e.extension = Math.min(C.GANTRY_REACH, e.extension + C.GANTRY_EXTEND_SPEED * C.STEP);
+      // The press crushes gears in its path, leaving a clear passage after retracting.
+      s.gears = s.gears.filter(g => {
+        if (!pistonTouches(e, g.x, g.y, 3, 3)) return true;
+        this._effect("gear-remove", g.x, g.y);
+        this._event("gear-remove", { x: g.x, y: g.y });
+        return false;
+      });
+      if (e.extension >= C.GANTRY_REACH) {
+        phase("hold");
+        this._event("gantry-impact", { x: e.x, y: gantryFootY(e) });
+      }
+    } else if (e.phase === "hold" && e.age + 1e-9 >= C.GANTRY_HOLD) {
+      phase("retract");
+    } else if (e.phase === "retract") {
+      e.extension = Math.max(0, e.extension - C.GANTRY_RETRACT_SPEED * C.STEP);
+      if (e.extension === 0) phase("recover");
+    } else if (e.phase === "recover" && e.age + 1e-9 >= C.GANTRY_RECOVER) {
+      e.dir = this._xDelta(s.player.x - e.x) < 0 ? -1 : 1;
+      phase("travel");
+    }
   }
   _spawnDispenser() {
     const col = 1 + Math.floor(this.random() * (C.COLS - 2));
@@ -721,84 +738,93 @@ export class Game {
     };
     this._event("dispenser-spawn", this.state.dispenser);
   }
-  _spawnDrone() {
+  _spawnFlywheel() {
     const dir = this.random() < 0.5 ? 1 : -1;
-    const row =
-      C.DRONE_MIN_ROW +
-      Math.floor(this.random() * (C.DRONE_MAX_ROW - C.DRONE_MIN_ROW + 1));
-    this.state.drone = {
-      id: this._id(),
-      x: dir > 0 ? -10 : C.WIDTH + 10,
-      y: row * C.CELL + 4,
-      dir,
-      speed:
-        this.state.score >= C.DIFFICULTY_SCORE_STEP &&
-        this.random() < C.DRONE_FAST_CHANCE
-          ? C.DRONE_MAX_SPEED
-          : C.DRONE_SPEED,
-      ...(this.variant === "cylinder" ? { entered: false } : {}),
+    this.state.flywheel = {
+      id: this._id(), x: 24 + this.random() * (C.WIDTH - 48), y: -10,
+      entered: true, vx: dir * (45 + this.random() * 25), vy: 8,
+      angle: 0, spin: dir * 10, age: 0, flash: 0,
     };
-    this._event("drone-spawn", this.state.drone);
+    this._event("flywheel-spawn", this.state.flywheel);
+  }
+  _moveFlywheel() {
+    const s = this.state;
+    if (!s.flywheel) {
+      s.timers.flywheel -= C.STEP;
+      if (s.timers.flywheel <= 0) this._spawnFlywheel();
+      return;
+    }
+    const e = s.flywheel;
+    e.age += C.STEP;
+    e.angle += e.spin * C.STEP;
+    e.flash = Math.max(0, e.flash - C.STEP);
+    e.vy += C.FLYWHEEL_GRAVITY * C.STEP;
+    const oldX = e.x;
+    const dx = e.vx * C.STEP, dy = e.vy * C.STEP;
+    let hit = null;
+    if (!this._entering(e)) {
+      for (const gear of s.gears) {
+        const x = this._xDelta(e.x - gear.x), y = (e.y - gear.y) / ROUND_Y;
+        const at = sweepCircle(x, y, dx, dy / ROUND_Y,
+          C.FLYWHEEL_RADIUS + C.FALLING_GEAR_RADIUS);
+        if (at !== null && (!hit || at < hit.at)) hit = { gear, at, x, y };
+      }
+    }
+    if (hit) {
+      const { gear, at } = hit;
+      let nx = hit.x + dx * at, ny = hit.y + dy * at / ROUND_Y;
+      const length = Math.hypot(nx, ny);
+      if (length > 1e-8) { nx /= length; ny /= length; }
+      else {
+        const speed = Math.hypot(e.vx, e.vy / ROUND_Y) || 1;
+        nx = -e.vx / speed; ny = -e.vy / ROUND_Y / speed;
+      }
+      const dot = e.vx * nx + e.vy / ROUND_Y * ny;
+      const incomingX = e.vx;
+      if (dot < 0) {
+        e.vx -= (1 + C.FLYWHEEL_RESTITUTION) * dot * nx;
+        e.vy -= (1 + C.FLYWHEEL_RESTITUTION) * dot * ny * ROUND_Y;
+        // Tangential contact changes the flywheel's spin without adding linear energy.
+        const tangent = -e.vx * ny + e.vy / ROUND_Y * nx;
+        e.spin = e.spin * 0.7 + tangent / C.FLYWHEEL_RADIUS * 0.3;
+      }
+      e.x += dx * at + e.vx * C.STEP * (1 - at);
+      e.y += dy * at + e.vy * C.STEP * (1 - at);
+      e.flash = 0.15;
+      s.gears = s.gears.filter(g => g !== gear);
+      s.fallingGears.push({
+        id: gear.id, x: gear.x, y: gear.y, hp: gear.hp,
+        vx: incomingX * 0.16, vy: 8, angle: 0, spin: clamp(e.spin, -8, 8),
+      });
+      this._event("gear-knock", { x: gear.x, y: gear.y, id: gear.id });
+      this._effect("spark", gear.x, gear.y);
+    } else {
+      e.x += dx;
+      e.y += dy;
+    }
+    this._wrapEnemy(e, oldX);
+    if (e.y > C.HEIGHT + C.FLYWHEEL_RADIUS) {
+      s.flywheel = null;
+      s.timers.flywheel = C.FLYWHEEL_RESPAWN;
+    }
+  }
+
+  _moveFallingGears() {
+    const s = this.state;
+    for (const e of s.fallingGears) {
+      e.vy = Math.min(C.FALLING_GEAR_MAX_SPEED, e.vy + C.FALLING_GEAR_GRAVITY * C.STEP);
+      e.x = wrapX(e.x + e.vx * C.STEP);
+      e.y += e.vy * C.STEP;
+      e.angle += e.spin * C.STEP;
+    }
+    s.fallingGears = s.fallingGears.filter(e => e.y < C.HEIGHT + C.FALLING_GEAR_RADIUS);
   }
   _moveEnemies() {
     const s = this.state;
-    s.timers.crawler -= C.STEP;
-    if (!s.crawler && s.timers.crawler <= 0) this._spawnCrawler();
-    if (s.crawler) {
-      const e = s.crawler;
-      e.life += C.STEP;
-      e.phase -= C.STEP;
-      e.tool = Math.max(0, e.tool - C.STEP);
-      const speed = e.speed;
-      const minY = this._crawlerMinY();
-      if (e.phase <= 0) {
-        e.phase = C.CRAWLER_TURN_PERIOD;
-        if (this.random() < 0.5 && e.x > 4 && e.x < 236)
-          e.vx = e.vx ? 0 : e.dir;
-        if (this.random() < 0.5) e.vy *= -1;
-      }
-      const previousX = e.x;
-      e.x += e.vx * speed * C.STEP;
-      this._wrapEnemy(e, previousX);
-      e.y += e.vy * speed * C.STEP;
-      if (e.y < minY || e.y > C.CRAWLER_MAX_Y) {
-        e.y = clamp(e.y, minY, C.CRAWLER_MAX_Y);
-        e.vy *= -1;
-      }
-      const overlap = s.sections.some((part) =>
-        part.links.some(
-          (link) =>
-            Math.abs(link.y - e.y) < 0.01 &&
-            -this._objectXDelta(e, link.x) * e.dir > 0 &&
-            -this._objectXDelta(e, link.x) * e.dir < C.CHAIN_OVERLAP_DISTANCE,
-        ),
-      );
-      if (overlap) e.vy *= -1;
-      const eaten = this._entering(e) ? null : this._gearAt(e.x, e.y);
-      s.gears = s.gears.filter((g) => {
-        if (g === eaten) {
-          e.tool = 0.25;
-          this._effect("gear-remove", g.x, g.y);
-          this._event("gear-remove", { x: g.x, y: g.y });
-          return false;
-        }
-        return true;
-      });
-      if (this.variant !== "cylinder" && (e.x < -10 || e.x > C.WIDTH + 10)) {
-        s.crawler = null;
-        s.timers.crawler = C.CRAWLER_SPAWN;
-      }
-    }
-    // Flea and scorpion share the arcade's fourteenth moving-object slot.
-    if (
-      !s.dispenser &&
-      !s.drone &&
-      s.mainLength <= C.DRONE_MAX_MAIN_LENGTH &&
-      s.frame % C.DRONE_SPAWN_FRAMES === 0 &&
-      this.random() < C.DRONE_SPAWN_CHANCE
-    )
-      this._spawnDrone();
-    if (!s.dispenser && !s.drone && s.mainLength < C.CHAIN_LENGTH) {
+    this._moveGantry();
+    this._moveFallingGears();
+    this._moveFlywheel();
+    if (!s.dispenser && s.mainLength < C.CHAIN_LENGTH) {
       const count = s.gears.filter(
         (g) => g.y >= C.DISPENSER_COUNT_MIN_Y,
       ).length;
@@ -828,20 +854,6 @@ export class Game {
         s.dispenser = null;
         s.timers.dispenser = C.DISPENSER_DELAY;
       }
-    }
-    if (s.drone) {
-      const e = s.drone;
-      const previousX = e.x;
-      e.x += e.dir * e.speed * C.STEP;
-      this._wrapEnemy(e, previousX);
-      const gear = this._entering(e) ? null : this._gearAt(e.x, e.y);
-      if (gear && !gear.electrified) {
-        gear.electrified = true;
-        this._event("electrify", { x: gear.x, y: gear.y, id: gear.id });
-        this._effect("electrify", gear.x, gear.y);
-      }
-      if (this.variant !== "cylinder" && (e.x < -12 || e.x > C.WIDTH + 12))
-        s.drone = null;
     }
     if (s.lowerReached && s.sections.length) {
       s.timers.extraHead -= C.STEP;
@@ -881,34 +893,36 @@ export class Game {
         return;
       }
     }
-    let points = type === "drone" ? C.DRONE_SCORE : C.DISPENSER_SCORE;
-    if (type === "crawler") {
-      const distance = Math.abs(e.y - s.player.y);
-      points =
-        distance < C.CRAWLER_NEAR
-          ? C.CRAWLER_SCORES[2]
-          : distance < C.CRAWLER_MEDIUM
-            ? C.CRAWLER_SCORES[1]
-            : C.CRAWLER_SCORES[0];
+    if (type === "gantry") {
+      e.hp--;
+      e.flash = 0.12;
+      this._event("gantry-hit", { x: e.x, y: gantryFootY(e), hp: e.hp });
+      if (e.hp > 0) {
+        e.phase = e.extension > 0 ? "retract" : "recover";
+        e.age = 0;
+        return;
+      }
     }
+    const points = type === "gantry" ? C.GANTRY_SCORE :
+      type === "flywheel" ? C.FLYWHEEL_SCORE : C.DISPENSER_SCORE;
     this._score(points, e.x, e.y);
     this._effect(type + "-destroy", e.x, e.y);
     this._event(type + "-destroy", { x: e.x, y: e.y, points });
     s[type] = null;
     s.timers[type] =
-      type === "crawler"
-        ? C.CRAWLER_RESPAWN
+      type === "gantry"
+        ? C.GANTRY_RESPAWN
         : type === "dispenser"
           ? C.DISPENSER_DELAY
-          : C.DRONE_SPAWN;
+          : C.FLYWHEEL_RESPAWN;
   }
   _checkPlayerCollision() {
     const s = this.state,
       p = s.player;
-    const touches = (o, spider = false) => {
+    const touches = (o) => {
       const x = Math.abs(this._objectXDelta(o, p.x)),
         y = Math.abs(o.y - p.y);
-      return x < (spider ? 10 : 7) && y < 7 && x + y < (spider ? 14 : 12);
+      return x < 7 && y < 7 && x + y < 12;
     };
     for (const section of s.sections)
       for (const link of section.links) {
@@ -918,8 +932,10 @@ export class Game {
         }
       }
     if (
-      (s.crawler && touches(s.crawler, true)) ||
-      (s.dispenser && touches(s.dispenser))
+      (s.gantry && pistonTouches(s.gantry, p.x, p.y, 3.8, 3.5)) ||
+      (s.dispenser && touches(s.dispenser)) ||
+      (s.flywheel && roundTouchesRect(s.flywheel, C.FLYWHEEL_RADIUS, p.x, p.y, 3.8, 3.5)) ||
+      s.fallingGears.some(e => roundTouchesRect(e, C.FALLING_GEAR_RADIUS, p.x, p.y, 3.8, 3.5))
     )
       this._die();
   }
@@ -978,8 +994,9 @@ export class Game {
     if (action === "clear") {
       s.gears = [];
       s.sections = [];
-      s.bullet = s.crawler = s.dispenser = s.drone = null;
-      s.timers = { crawler: 1e9, dispenser: 1e9, drone: 1e9, extraHead: 1e9 };
+      s.bullet = s.gantry = s.dispenser = s.flywheel = null;
+      s.fallingGears = [];
+      s.timers = { gantry: 1e9, dispenser: 1e9, flywheel: 1e9, extraHead: 1e9 };
       s.lowerReached = false;
       s.mode = "playing";
     } else if (action === "gear") {
@@ -1010,9 +1027,10 @@ export class Game {
       if (g) this._hitGear(g);
     } else if (action === "enemy") {
       const type = data.type;
-      if (type === "crawler") this._spawnCrawler();
+      if (type === "gantry") this._spawnGantry();
+      if (!["gantry", "dispenser", "flywheel"].includes(type)) return null;
       if (type === "dispenser") this._spawnDispenser();
-      if (type === "drone") this._spawnDrone();
+      if (type === "flywheel") this._spawnFlywheel();
       Object.assign(s[type], data);
       return s[type];
     } else if (action === "hitEnemy") this._hitEnemy(data.type);
@@ -1048,7 +1066,7 @@ export class Game {
           hp: (n % 4) + 1,
           electrified: n % 4 === 0,
         });
-      this.debug("enemy", { type: "crawler", x: 190, y: 216 });
+      this.debug("enemy", { type: "gantry", x: 190, entered: true, phase: "warning" });
       s.player = { x: 120, y: C.PLAYER_MAX_Y };
     } else if (name === "poison") {
       this.debug("section", { count: 6, x: 100, y: 100 });
@@ -1057,9 +1075,9 @@ export class Game {
       this.debug("section", { count: 8, x: 164, y: 116 });
     else if (name === "enemies") {
       this.debug("section", { count: 8, x: 124, y: 36 });
-      this.debug("enemy", { type: "crawler", x: 50, y: 212 });
+      this.debug("enemy", { type: "gantry", x: 50, entered: true, phase: "hold", extension: 32 });
       this.debug("enemy", { type: "dispenser", x: 164, y: 80 });
-      this.debug("enemy", { type: "drone", x: 72, y: 100 });
+      this.debug("enemy", { type: "flywheel", x: 72, y: 100, entered: true });
       for (let col = 7; col < 24; col += 2)
         this.debug("gear", { col, row: 12 });
     } else this.debug("section", { count: 12, x: 124, y: 36 });

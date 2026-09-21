@@ -75,73 +75,31 @@ for (const [name, browserType, options] of [
       a.input.canvas.focus({ preventScroll: true });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }, scenario);
-  const menu = () =>
-    page.evaluate(() => {
-      const a = window.__chainDrive;
-      a.input.clear();
-      a.game.state.mode = "gameover";
-      a.draw();
-    });
-  const highScores = () =>
-    page.evaluate(() => ({
-      classic: JSON.parse(localStorage.getItem("chain-drive.high-score")),
-      cylinder: JSON.parse(
-        localStorage.getItem("chain-drive.high-score-cylinder"),
-      ),
-    }));
   try {
     await load();
-    assert.equal((await state()).variant, "classic");
-    assert.equal(await page.locator("#variant-classic").getAttribute("aria-pressed"), "true");
-    assert.equal(await page.locator("#variant-picker").isVisible(), true);
-    check("A fresh visit defaults to Classic with an accessible mode picker");
-
+    assert.equal((await state()).variant, "cylinder");
+    assert.equal(await page.locator("#variant-picker").count(), 0);
+    assert.equal(await page.evaluate(() => typeof window.__chainDrive.game.setVariant), "undefined");
+    check("Fresh visits start in the connected playfield; Classic is archived");
     await page.evaluate(() => {
       localStorage.setItem("chain-drive.high-score", "4321");
       localStorage.setItem("chain-drive.high-score-cylinder", "1234");
     });
-    await load();
-    assert.equal((await state()).highScore, 4321);
-    await page.locator("#variant-cylinder").click();
+    await load("classic");
     assert.equal((await state()).variant, "cylinder");
-    assert.equal((await state()).highScore, 1234);
-    assert.equal(await page.locator("#variant-cylinder").getAttribute("aria-pressed"), "true");
-    assert.match(await page.locator("#variant-description").textContent(), /slope|descend|row|lower/i);
-    assert.match(await page.locator("#variant-label").textContent(), /cylinder/i);
+    assert.equal((await state()).highScore, 0);
     await page.keyboard.press("Enter");
-    assert.equal((await state()).mode, "playing");
-    assert.equal((await state()).variant, "cylinder");
-    assert.equal(await page.locator("#variant-picker").isVisible(), false);
-    assert.equal(await page.evaluate(() => window.__chainDrive.game.setVariant("classic")), false);
-    check("The title picker selects Cylinder; Enter starts it and active play cannot change modes");
-
     await page.evaluate(() => {
       window.__chainDrive.game.debug("score", { points: 1500 });
       window.__chainDrive.draw();
     });
-    assert.deepEqual(await highScores(), { classic: 4321, cylinder: 1500 });
-    await menu();
-    assert.equal(await page.locator("#variant-picker").isVisible(), true);
-    await page.locator("#variant-classic").click();
-    assert.equal((await state()).highScore, 4321);
-    await page.keyboard.press("Enter");
-    await page.evaluate(() => {
-      window.__chainDrive.game.debug("score", { points: 5000 });
-      window.__chainDrive.draw();
-    });
-    assert.deepEqual(await highScores(), { classic: 5000, cylinder: 1500 });
-    await menu();
-    await page.locator("#variant-cylinder").click();
     await load();
-    assert.equal((await state()).variant, "cylinder");
     assert.equal((await state()).highScore, 1500);
-    check("Game-over switching and reload retain the choice and keep both high scores separate");
-
-    await load("classic");
-    assert.equal((await state()).variant, "classic");
-    await load("cylinder");
-    assert.equal((await state()).variant, "cylinder");
-    check("Explicit mode URLs override the saved choice and retain the deployment path");
+    assert.deepEqual(await page.evaluate(() => [
+      localStorage.getItem("chain-drive.high-score"),
+      localStorage.getItem("chain-drive.high-score-cylinder"),
+    ]), ["4321", "1234"]);
+    check("Legacy mode URLs cannot restore Classic; current best scores persist and archived scores remain intact");
 
     for (const [key, start, end] of [
       ["ArrowRight", 238, 1],
@@ -199,22 +157,17 @@ for (const [name, browserType, options] of [
     await setup({ x: 124, y: 44 });
     const enemies = await page.evaluate(() => {
       const a = window.__chainDrive;
-      const crawler = a.game.debug("enemy", {
-        type: "crawler", x: 239, y: 176, vx: 1, vy: 0,
-        dir: 1, speed: 120, phase: 100,
-      });
-      const drone = a.game.debug("enemy", {
-        type: "drone", x: 1, y: 100, dir: -1, speed: 120,
-      });
-      const ids = { crawler: crawler.id, drone: drone.id };
+      const gantry = a.game.debug("enemy", { type: "gantry", x: 239, entered: true, dir: 1 });
+      const flywheel = a.game.debug("enemy", { type: "flywheel", x: 1, y: 100, vx: -120, vy: 0 });
+      const ids = { gantry: gantry.id, flywheel: flywheel.id };
       a.stepFrames(1);
-      return { ids, crawler: a.game.state.crawler, drone: a.game.state.drone };
+      return { ids, gantry: a.game.state.gantry, flywheel: a.game.state.flywheel };
     });
-    assert.equal(enemies.crawler.id, enemies.ids.crawler);
-    assert.equal(enemies.drone.id, enemies.ids.drone);
-    assert.equal(enemies.crawler.x, 1);
-    assert.equal(enemies.drone.x, 239);
-    check("Crawler and drone keep their identities while wrapping in opposite directions");
+    assert.equal(enemies.gantry.id, enemies.ids.gantry);
+    assert.equal(enemies.flywheel.id, enemies.ids.flywheel);
+    assert.ok(Math.abs(enemies.gantry.x - 0.4) < 1e-8);
+    assert.equal(enemies.flywheel.x, 239);
+    check("Gantry and flywheel retain their identities while wrapping in opposite directions");
 
     await setup({ count: 1, x: 237, y: 252, playerX: 2 });
     await frames(1);
@@ -292,7 +245,7 @@ for (const [name, browserType, options] of [
       mode: "paused", pixels: true, frame: true, time: true,
       phases: true, gears: true, captured: false, spin: { x: 0, y: 0 },
     });
-    assert.equal(await page.locator("#variant-picker").isVisible(), false);
+    assert.equal(await page.locator("#variant-picker").count(), 0);
     await page.screenshot({ path: `${output}/${name}-paused.png` });
     await page.keyboard.press("Enter");
     assert.equal((await state()).mode, "playing");
@@ -313,14 +266,14 @@ for (const [name, browserType, options] of [
         return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
       };
       return {
-        picker: rect("variant-picker"),
+
         start: rect("start-btn"),
         scrollWidth: document.documentElement.scrollWidth,
         width: innerWidth,
         height: innerHeight,
       };
     });
-    for (const item of [layout.picker, layout.start]) {
+    for (const item of [layout.start]) {
       assert.ok(item.left >= 0 && item.right <= layout.width, JSON.stringify(layout));
       assert.ok(item.top >= 0 && item.bottom <= layout.height, JSON.stringify(layout));
     }
@@ -337,7 +290,7 @@ for (const [name, browserType, options] of [
     await mobile.screenshot({ path: `${output}/${name}-mobile-seam.png` });
     assert.equal(await mobile.evaluate(() => window.__chainDrive.game.state.variant), "cylinder");
     diagnostics.mobile = layout;
-    check("The Cylinder picker and start button fit 514×683; seam artwork is captured at laptop-preview size");
+    check("The start button fits 514×683; seam artwork is captured at laptop-preview size");
     await mobile.close();
 
     assert.deepEqual(errors, []);

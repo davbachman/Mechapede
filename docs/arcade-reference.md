@@ -1,3 +1,5 @@
+> Historical reference for the archived Classic implementation (Git tag `archive/classic-2026-09-21`). The current game uses connected sides, a piston gantry, gravitational flywheels and falling gears; see [current rules](development.md). Descriptions below record the original research, not the current enemy cast.
+
 # Mechapede — arcade reference
 
 Research date: 2026-09-08. Target: Atari **Centipede upright arcade, revision 3**, single player, **Easy**, **3 starting lives**, bonus at **each 12,000 points**. These are the TM-182 operator manual's recommended settings. The maximum is **six reserve lives plus the active carriage: seven playable lives**. No home-console or browser-clone rules were used.

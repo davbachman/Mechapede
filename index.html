@@ -35,14 +35,7 @@
                 <p id="overlay-description">
                   Break the chain.<br />Keep the machine from breaking you.
                 </p>
-                <fieldset class="variant-picker" id="variant-picker">
-                  <legend>PLAYFIELD</legend>
-                  <div class="variant-options">
-                    <button type="button" id="variant-classic" aria-pressed="true">CLASSIC</button>
-                    <button type="button" id="variant-cylinder" aria-pressed="false">CYLINDER ↔</button>
-                  </div>
-                  <p id="variant-description">Solid sides. Conveyors turn at the edges.</p>
-                </fieldset>
+                <p class="playfield-note">CONNECTED SIDES · KEEP MOVING</p>
                 <button class="primary-button" id="start-btn">
                   ENGAGE DRIVE <span>↗</span>
                 </button>
@@ -73,7 +66,7 @@
                   <rect x="7" y="3" width="15" height="20" rx="7" />
                   <rect x="14" y="14" width="15" height="20" rx="7" />
                 </g></svg
-              ><span>MECHAPEDE<small id="variant-label">CLASSIC / MECHANICAL ARCADE</small></span></a
+              ><span>MECHAPEDE<small id="variant-label">CYLINDER / MECHANICAL ARCADE</small></span></a
             >
             <div class="header-right">
               <span class="live-dot"></span
@@ -106,7 +99,7 @@
           <div class="hud" aria-live="off">
             <div><span>SCORE</span><strong id="score">000000</strong></div>
             <div class="high">
-              <span id="best-label">CLASSIC BEST</span><strong id="high-score">000000</strong>
+              <span id="best-label">PERSONAL BEST</span><strong id="high-score">000000</strong>
             </div>
             <div class="hud-wave">
               <span>WAVE</span><strong id="wave">01</strong>
@@ -213,6 +206,13 @@
               <span class="points">100 / 10</span>
             </div>
             <div class="guide-row">
+              <span class="guide-symbol tread-symbol" aria-hidden="true">
+                <svg viewBox="0 0 32 32"><path d="M1 4h30M1 8h30" stroke="#9caaa9" stroke-width="2"/><rect x="8" y="3" width="16" height="10" rx="2" fill="#b3a270"/><path d="M16 13v13M10 27h12" stroke="#d9dfcf" stroke-width="3"/><circle cx="16" cy="8" r="2" fill="#ffbc62"/></svg>
+              </span>
+              <div><strong>MAINTENANCE GANTRY</strong><p>Dodge the marked column. Shoot to interrupt.</p></div>
+              <span class="points">600</span>
+            </div>
+            <div class="guide-row">
               <span class="guide-symbol gear-symbol">⚙</span>
               <div>
                 <strong>MOUNTED GEAR</strong>
@@ -221,11 +221,11 @@
               <span class="points">1</span>
             </div>
             <div class="guide-row">
-              <span class="guide-symbol electric-symbol">ϟ</span>
-              <div>
-                <strong>ELECTRIFIED GEAR</strong>
-                <p>Disrupts the chain's steering.</p>
-              </div>
+              <span class="guide-symbol tread-symbol" aria-hidden="true">
+                <svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="13" fill="#182328" stroke="#d7b29e" stroke-width="3"/><path d="M16 4v12L6 22m10-6 10 6" stroke="#b6b9aa" stroke-width="3"/><path d="M28 10a13 13 0 0 1-7 18" fill="none" stroke="#bd6247" stroke-width="3"/></svg>
+              </span>
+              <div><strong>RUNAWAY FLYWHEEL</strong><p>Ricochets knock gears loose. Dodge or shoot the falling debris.</p></div>
+              <span class="points">1,000</span>
             </div>
           </section>
           <div class="side-bottom">

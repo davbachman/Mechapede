@@ -37,13 +37,11 @@ window.addEventListener("pageshow", () => window.scrollTo(0, 0), {
 const suppliedSeed = params.has("seed")
   ? Number(params.get("seed")) >>> 0
   : null;
-const initialVariant =
-  (params.get("mode") ?? storage.get("variant", "classic")) === "cylinder"
-    ? "cylinder" : "classic";
-const scoreKey = (variant) => variant === "cylinder" ? "high-score-cylinder" : "high-score";
-let best = numberPref(scoreKey(initialVariant), 0, 0, 999999999);
+// This ruleset has its own best; archived Classic/Cylinder scores remain saved.
+const scoreKey = "high-score-machinery";
+let best = numberPref(scoreKey, 0, 0, 999999999);
 const canvas = $("game"),
-  game = new Game({ seed: suppliedSeed ?? Date.now() >>> 0, variant: initialVariant, highScore: best });
+  game = new Game({ seed: suppliedSeed ?? Date.now() >>> 0, highScore: best });
 const audio = new MechanicalAudio({
   muted: !!storage.get("muted", false),
   volume: numberPref("volume", 0.45, 0, 1),
@@ -294,25 +292,6 @@ async function toggleFullscreen() {
   }
 }
 $("start-btn").addEventListener("click", () => handleAction("start"));
-for (const variant of ["classic", "cylinder"]) {
-  $("variant-" + variant).addEventListener("click", () => {
-    const nextBest = numberPref(scoreKey(variant), 0, 0, 999999999);
-    if (!game.setVariant(variant, nextBest)) return;
-    best = nextBest;
-    storage.set("variant", variant);
-    const url = new URL(location.href);
-    url.searchParams.set("mode", variant);
-    history.replaceState(null, "", url);
-    input.clear();
-    renderer.particles = [];
-    renderer.labels = [];
-    accumulator = 0;
-    shownMode = "";
-    draw(0);
-    // Enter should engage the chosen mode after using the picker.
-    canvas.focus({ preventScroll: true });
-  });
-}
 $("pause-button").addEventListener("click", () => {
   handleAction("pause");
   if (game.state.mode !== "paused") canvas.focus({ preventScroll: true });
@@ -392,7 +371,7 @@ function simulate(seconds) {
           Math.min(C.PLAYER_MAX_STEP, control["d" + axis]),
         );
         let actual = game.state.player[axis] - before[axis];
-        if (axis === "x" && game.state.variant === "cylinder")
+        if (axis === "x")
           actual = wrappedDelta(actual);
         if (Math.abs(intended - actual) > 1e-7) input.spin.stopAxis(axis);
       }
@@ -406,7 +385,7 @@ function updateHUD() {
   const score = s.score || 0;
   if (score > best) {
     best = score;
-    storage.set(scoreKey(s.variant), best);
+    storage.set(scoreKey, best);
   }
   s.highScore = Math.max(best, s.highScore || 0);
   $("score").textContent = String(score).padStart(6, "0");
@@ -450,14 +429,6 @@ function updateHUD() {
   const overlayKey = mode + ":" + captureState + ":" + controlMode + ":" + s.variant;
   if (shownMode === overlayKey) return;
   shownMode = overlayKey;
-  $("variant-picker").hidden = !["title", "gameover"].includes(mode);
-  for (const variant of ["classic", "cylinder"])
-    $("variant-" + variant).setAttribute("aria-pressed", String(s.variant === variant));
-  $("variant-label").textContent = s.variant.toUpperCase() + " / MECHANICAL ARCADE";
-  $("best-label").textContent = s.variant.toUpperCase() + " BEST";
-  $("variant-description").textContent = s.variant === "cylinder"
-    ? "Sides connect. Conveyors slope one row per lap, then climb at the bottom."
-    : "Solid sides. Conveyors turn at the edges.";
   $("start-btn").disabled = captureState === "requesting";
   syncCaptureUI();
   const visible = ["title", "paused", "gameover"].includes(mode);
@@ -544,9 +515,7 @@ document.addEventListener("fullscreenchange", fitPlayfield);
 window.render_game_to_text = () => {
   const s = game.state;
   return JSON.stringify({
-    coordinates: s.variant === "cylinder"
-      ? "240×256 logical pixels; +x right, +y down. Horizontal positions wrap modulo 240; tool y212–252. Conveyor slope: 8 pixels per 240 horizontal pixels."
-      : "240×256 logical pixels; origin top-left, +x right, +y down. Tool centers: x4–236/y212–252.",
+    coordinates: "240×256 logical pixels; +x right, +y down. Horizontal positions wrap modulo 240; tool y212–252. Conveyor slope: 8 pixels per 240 horizontal pixels. Gantry rail y204; piston warning is harmless, extended shaft/foot are dangerous. Flywheels follow gravity and ricochet; fallingGears are moving hazards, not mounted obstacles.",
     variant: s.variant,
     mode: s.mode,
     score: s.score,
@@ -569,9 +538,10 @@ window.render_game_to_text = () => {
         fast,
       }),
     ),
-    crawler: s.crawler,
+    gantry: s.gantry,
     dispenser: s.dispenser,
-    drone: s.drone,
+    flywheel: s.flywheel,
+    fallingGears: s.fallingGears,
     mainLength: s.mainLength,
     chainSpeed: s.chainSpeed,
     timers: s.timers,

@@ -13,9 +13,9 @@ export class MechanicalAudio {
     this.lastEvents = new Map();
     this.nextAmbient = {
       chain: 0,
-      crawler: 0,
+      gantry: 0,
       dispenser: 0,
-      drone: 0,
+      flywheel: 0,
       electric: 0,
     };
     this.phase = 0;
@@ -231,15 +231,13 @@ export class MechanicalAudio {
       headActivated: "headActivate",
       death: "playerDeath",
       life: "extraLife",
-      spiderDeath: "crawlerDeath",
       fleaHit: "dispenserHit",
       fleaDeath: "dispenserDeath",
-      scorpionDeath: "droneDeath",
       poison: "electrify",
       wave: "waveStart",
-      crawlerDestroy: "crawlerDeath",
+      gantryDestroy: "gantryDeath",
       dispenserDestroy: "dispenserDeath",
-      droneDestroy: "droneDeath",
+      flywheelDestroy: "flywheelDeath",
       headEnter: "headActivate",
     };
     type = aliases[type] || type;
@@ -281,7 +279,7 @@ export class MechanicalAudio {
         });
         this._metal(1320, 0.055, 0.07, { delay: 0.055 });
         break;
-      case "crawlerDeath":
+      case "gantryDeath":
         this._tone(240, 0.28, 0.21, { end: 43, type: "triangle" });
         this._noise(0.21, 0.3, { frequency: 650 });
         this._metal(430, 0.19, 0.2, { delay: 0.035 });
@@ -295,7 +293,7 @@ export class MechanicalAudio {
         this._metal(660, 0.13, 0.12, { delay: 0.055 });
         this._noise(0.14, 0.2, { frequency: 2100 });
         break;
-      case "droneDeath":
+      case "flywheelDeath":
         this._tone(680, 0.37, 0.085, { end: 70, type: "sawtooth" });
         this._noise(0.17, 0.3, { frequency: 3900 });
         this._metal(310, 0.24, 0.2, { delay: 0.09 });
@@ -303,7 +301,23 @@ export class MechanicalAudio {
       case "electrify":
         this._electric(false);
         break;
-      case "crawlerSpawn":
+      case "gantryWarning":
+        this._tone(740, 0.13, 0.10, { type: "square", end: 680 });
+        this._tone(740, 0.13, 0.08, { type: "square", delay: 0.25 });
+        break;
+      case "gantryStrike":
+        this._noise(0.18, 0.24, { frequency: 1350, q: 0.5 });
+        this._tone(180, 0.17, 0.08, { type: "sawtooth", end: 65 });
+        break;
+      case "gantryImpact":
+        this._metal(125, 0.22, 0.25);
+        this._noise(0.05, 0.2, { frequency: 450 });
+        break;
+      case "gantryHit":
+        this._metal(940, 0.12, 0.2);
+        this._noise(0.08, 0.12, { frequency: 2300 });
+        break;
+      case "gantrySpawn":
         this._tone(130, 0.18, 0.09, { end: 66, type: "triangle" });
         this._metal(310, 0.09, 0.065, { delay: 0.08 });
         break;
@@ -311,13 +325,18 @@ export class MechanicalAudio {
         this._metal(1720, 0.065, 0.07);
         this._metal(1140, 0.075, 0.065, { delay: 0.075 });
         break;
-      case "droneSpawn":
+      case "gearKnock":
+        this._metal(190, 0.24, 0.28);
+        this._metal(810, 0.16, 0.11, { delay: 0.035 });
+        this._noise(0.08, 0.18, { frequency: 650 });
+        break;
+      case "flywheelSpawn":
         this._tone(74, 0.2, 0.04, {
           end: 158,
           type: "sawtooth",
           attack: 0.012,
         });
-        this._electric(false);
+        this._metal(480, 0.16, 0.09);
         break;
       case "playerDeath":
         this.stop(true);
@@ -401,10 +420,10 @@ export class MechanicalAudio {
       this._noise(0.018, 0.026, { frequency: 1450, ambient: true });
     }
     if (
-      this._present(state.crawler ?? state.spider ?? state.crawlers) &&
-      now >= this.nextAmbient.crawler
+      this._present(state.gantry) && state.gantry.phase === "travel" &&
+      now >= this.nextAmbient.gantry
     ) {
-      this.nextAmbient.crawler = now + 0.3;
+      this.nextAmbient.gantry = now + 0.3;
       this._tone(82, 0.095, 0.07, { end: 53, type: "triangle", ambient: true });
       this._noise(0.065, 0.07, { frequency: 720, ambient: true });
       this._metal(370, 0.047, 0.03, { delay: 0.083, ambient: true });
@@ -423,10 +442,10 @@ export class MechanicalAudio {
       });
     }
     if (
-      this._present(state.drone ?? state.scorpion ?? state.drones) &&
-      now >= this.nextAmbient.drone
+      this._present(state.flywheel) &&
+      now >= this.nextAmbient.flywheel
     ) {
-      this.nextAmbient.drone = now + 0.39;
+      this.nextAmbient.flywheel = now + 0.39;
       this._tone(121, 0.16, 0.022, {
         end: 139,
         type: "sawtooth",

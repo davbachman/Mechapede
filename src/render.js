@@ -3,6 +3,8 @@ import { GearMotion } from "./gear-motion.js";
 import { TreadMotion } from "./tread-motion.js";
 import { chainPoses } from "./chain-pose.js";
 import { wrapX, wrappedDelta } from "./topology.js";
+import { C } from "./constants.js";
+import { gantryFootY } from "./gantry.js";
 const TAU = Math.PI * 2;
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 function roundRect(c, x, y, w, h, r) {
@@ -168,7 +170,7 @@ export class Renderer {
           ring: true,
           color: "#ffd08a",
         });
-      if (e.points && /crawler|drone|dispenser/.test(type))
+      if (e.points && /gantry|flywheel|dispenser/.test(type))
         this.labels.push({ x, y, text: String(e.points), life: 1 });
     }
   }
@@ -187,28 +189,26 @@ export class Renderer {
     const t = s.time || 0;
     this.background(s.wave || 1, t);
     if (this.cylinder) this.seamMarks();
+    this.gantryRail();
     this.workLight(s);
     this.gearMotion.update(s);
     this.treadMotion.update(s);
     for (const gear of s.gears || [])
       this.wrapDraw(gear.x, 6, () => this.gear(gear, t));
     for (const section of s.sections || []) this.chain(section, t, s.gears);
-    if (s.drone)
+    for (const gear of s.fallingGears || [])
+      this.wrapDraw(gear.x, 6, () => this.fallingGear(gear));
+    if (s.flywheel)
       this.wrapDraw(
-        s.drone.x,
-        16,
-        () => this.drone(s.drone, t),
-        s.drone.entered !== false,
+        s.flywheel.x,
+        9,
+        () => this.flywheel(s.flywheel, t),
+        s.flywheel.entered !== false,
       );
     if (s.dispenser)
       this.wrapDraw(s.dispenser.x, 5, () => this.dispenser(s.dispenser, t));
-    if (s.crawler)
-      this.wrapDraw(
-        s.crawler.x,
-        10,
-        () => this.crawler(s.crawler, t),
-        s.crawler.entered !== false,
-      );
+    if (s.gantry)
+      this.wrapDraw(s.gantry.x, 12, () => this.gantry(s.gantry, t), s.gantry.entered !== false);
     const b = s.bullet;
     if (b) {
       this.wrapDraw(b.x, 2, () => {
@@ -717,59 +717,70 @@ export class Renderer {
     line(c, -1.8, 1.55, 1.8, 1.55, "#f0bb6d", 0.6);
     c.restore();
   }
-  crawler(e, t) {
+  gantryRail() {
     const c = this.c;
+    c.fillStyle = "#070d10";
+    c.fillRect(0, C.GANTRY_Y - 3, 240, 6);
+    line(c, 0, C.GANTRY_Y - 2.2, 240, C.GANTRY_Y - 2.2, "#8c96915e", 0.8);
+    line(c, 0, C.GANTRY_Y + 2, 240, C.GANTRY_Y + 2, "#b8c5b16b", 0.6);
+    for (let x = 4; x < 240; x += 8) {
+      c.fillStyle = "#354340";
+      c.fillRect(x, C.GANTRY_Y - 1, 2, 1.6);
+    }
+  }
+  gantry(e, t) {
+    const c = this.c;
+    const warning = e.phase === "warning";
+    const foot = gantryFootY(e);
+    // The fixed warning lane is visible on both sides when a strike crosses the seam.
+    if (warning) {
+      const pulse = 0.6 + 0.4 * Math.sin(e.age * 22);
+      c.fillStyle = `rgba(255,179,71,${0.07 + pulse * 0.07})`;
+      c.fillRect(e.x - 6, C.PLAYER_MIN_Y, 12, 44);
+      c.setLineDash([1.7, 2]);
+      line(c, e.x - 6, 210, e.x - 6, 256, "#f6c06aaa", 0.45);
+      line(c, e.x + 6, 210, e.x + 6, 256, "#f6c06aaa", 0.45);
+      c.setLineDash([]);
+      // Closing chevrons at the floor communicate an imminent downward stroke.
+      for (const side of [-1, 1])
+        line(c, e.x + side * 4, 248, e.x, 251, "#ffd38b", 0.8);
+    }
+    if (e.extension > 0) {
+      c.fillStyle = "#080d10";
+      c.fillRect(e.x - 2.1, 207, 4.2, e.extension + 2);
+      c.fillStyle = "#74888c";
+      c.fillRect(e.x - C.GANTRY_STEM_HALF_WIDTH, 208, C.GANTRY_STEM_HALF_WIDTH * 2, e.extension);
+      c.fillStyle = "#deebe2";
+      c.fillRect(e.x - 0.75, 208, 0.7, e.extension);
+    }
     c.save();
-    c.translate(e.x, e.y);
-    const phase = t * 18;
-    for (const side of [-1, 1])
-      for (let i = 0; i < 3; i++) {
-        const y = (i - 1) * 2.5,
-          k = Math.sin(phase + i * 2 + side) * 1.2;
-        line(c, side * 3, y, side * 6, y - 1 + k, "#91a1a4", 1);
-        line(c, side * 6, y - 1 + k, side * 8, y + 2 - k, "#566f78", 0.9);
-        c.fillStyle = "#c1c8b9";
-        c.fillRect(side * 6 - 0.45, y - 1 + k - 0.45, 0.9, 0.9);
-      }
-    c.fillStyle = "#53616a";
-    roundRect(c, -5, -3.4, 10, 7, 2.5);
-    c.fill();
-    c.strokeStyle = "#a9b4b4";
-    c.lineWidth = 0.55;
-    c.stroke();
-    c.fillStyle = "#263840";
-    roundRect(c, -3.8, -2.4, 7.6, 4.8, 1.6);
-    c.fill();
-    line(c, -3.2, 1.5, 3.2, 1.5, "#71818b", 0.5);
-    c.fillStyle = "#ff675b";
-    c.beginPath();
-    c.ellipse(0, -0.8, 1.9, 1.1, 0, 0, TAU);
-    c.fill();
-    c.fillStyle = "#ffd4a5";
-    c.fillRect(-0.9, -1.25, 1.8, 0.5);
-    const wrench =
-      e.tool > 0 ? Math.sin(clamp(e.tool / 0.25, 0, 1) * Math.PI) : 0;
-    const swing = Math.sin(t * 8) * 2 + wrench * 3.2,
-      toolY = 6.4 - wrench * 3.8,
-      elbowX = 5 + wrench * 1.6,
-      elbowY = 5 - wrench * 1.6;
-    line(c, 3, 2, elbowX, elbowY, "#c1a06a", 0.9);
-    line(c, elbowX, elbowY, 2 + swing, toolY, "#c1a06a", 0.9);
-    line(c, 2 + swing, toolY, 1 + swing, toolY - 0.7, "#cdd2c4", 0.8);
-    line(c, 2 + swing, toolY, 2.4 + swing, toolY + 1, "#cdd2c4", 0.8);
-    if (wrench > 0.65) {
-      line(c, 3 + swing, toolY - 1.5, 4 + swing, toolY - 2.4, "#efc888", 0.4);
-      line(
-        c,
-        3.5 + swing,
-        toolY + 0.5,
-        4.5 + swing,
-        toolY + 0.7,
-        "#efc888",
-        0.4,
-      );
+    c.translate(e.x, C.GANTRY_Y);
+    for (const x of [-6, 6]) {
+      c.save(); c.translate(x, -2); c.scale(1, this.roundScaleY);
+      c.fillStyle = "#18292d"; cogPath(c, 2.2, 8); c.fill();
+      c.strokeStyle = "#bdc5b5"; c.lineWidth = 0.5; c.stroke();
+      const spin = e.x / 2.2;
+      line(c, 0, 0, Math.cos(spin) * 1.6, Math.sin(spin) * 1.6, "#c7a664", 0.65);
+      c.restore();
+    }
+    c.fillStyle = e.flash > 0 ? "#fff0c2" : "#9b9475";
+    roundRect(c, -8, -2.5, 16, 6.5, 1.2); c.fill();
+    c.strokeStyle = "#d5d9be"; c.lineWidth = 0.5; c.stroke();
+    c.fillStyle = "#26373a"; c.fillRect(-5.8, -1, 11.6, 3.6);
+    for (let i = 0; i < C.GANTRY_HP; i++) {
+      c.fillStyle = i < e.hp ? (warning ? "#ffc164" : "#99c9bd") : "#354548";
+      c.fillRect(-3.3 + i * 2.6, -0.4, 1.5, 2);
+    }
+    for (const x of [-6.6, 6.6]) {
+      c.fillStyle = "#28383a"; c.fillRect(x - 0.45, 0, 0.9, 0.9);
     }
     c.restore();
+    c.fillStyle = e.flash > 0 ? "#fff4c9" : "#b5a46e";
+    roundRect(c, e.x - 6, foot - 1.5, 12, 3, 0.4); c.fill();
+    c.strokeStyle = "#e1dac0"; c.lineWidth = 0.35; c.stroke();
+    for (let x = -4; x <= 4; x += 3)
+      line(c, e.x + x - 1, foot + 0.8, e.x + x + 0.6, foot - 0.8, "#243131", 1.2);
+    c.fillStyle = "#ffd17a"; c.fillRect(e.x - 1, foot - 0.6, 2, 1.2);
   }
   dispenser(e, t) {
     const c = this.c;
@@ -801,35 +812,49 @@ export class Renderer {
     }
     c.restore();
   }
-  drone(e, t) {
+  flywheel(e, t) {
     const c = this.c;
     c.save();
     c.translate(e.x, e.y);
-    const dir = e.dir || 1;
-    c.scale(dir, 1);
-    c.strokeStyle = "#718a90";
-    c.lineWidth = 1;
-    c.beginPath();
-    c.moveTo(-4, 0);
-    c.bezierCurveTo(-8, -4, -10, 5, -12, 2);
-    c.stroke();
-    c.fillStyle = "#9fb5b8";
-    roundRect(c, -5, -2.5, 10, 5, 1.7);
-    c.fill();
-    c.fillStyle = "#33484e";
-    roundRect(c, -4, -1.8, 7, 3.5, 1);
-    c.fill();
-    c.fillStyle = "#cfac6e";
-    c.fillRect(1, -1.3, 2, 2.6);
-    for (const x of [-3, 3]) {
-      c.fillStyle = "#53676f";
-      c.beginPath();
-      c.arc(x, 2.5, 1.4, 0, TAU);
-      c.fill();
+    c.scale(1, this.roundScaleY);
+    c.rotate(e.angle);
+    // A heavy smooth rim distinguishes the free flywheel from mounted brass gears.
+    c.fillStyle = "#090f13";
+    c.beginPath(); c.arc(0, 0, 7.5, 0, TAU); c.fill();
+    c.strokeStyle = e.flash > 0 ? "#fff0c6" : "#d7b29e";
+    c.lineWidth = 1.6;
+    c.beginPath(); c.arc(0, 0, 6.4, 0, TAU); c.stroke();
+    c.strokeStyle = "#b74f36";
+    c.lineWidth = 1.8;
+    c.beginPath(); c.arc(0, 0, 6.3, -0.6, 1.6); c.stroke();
+    c.strokeStyle = "#8e9894";
+    c.lineWidth = 1.15;
+    c.beginPath(); c.arc(0, 0, 4.6, 0, TAU); c.stroke();
+    for (let i = 0; i < 3; i++) {
+      c.rotate(TAU / 3);
+      line(c, 1, 0, 4.8, 0, "#b5bcae", 1.7);
     }
-    line(c, -11.5, 2, -13, 2, "#e0f5e8", 0.8);
-    line(c, -13, 2, -15 + (Math.floor(t * 17) % 2), 0, "#84e9ef", 0.5);
-    line(c, -13, 2, -14, 4, "#ccfeee", 0.5);
+    c.fillStyle = "#344346";
+    c.beginPath(); c.arc(0, 0, 2, 0, TAU); c.fill();
+    c.fillStyle = "#ffb281";
+    c.fillRect(-0.8, -0.8, 1.6, 1.6);
+    c.restore();
+  }
+  fallingGear(e) {
+    const c = this.c;
+    c.save();
+    c.translate(e.x, e.y);
+    c.scale(1, this.roundScaleY);
+    // A short warm trail and open axle distinguish falling debris from fixed gears.
+    line(c, -e.vx * 0.025, -7, 0, -4.5, "#ffb57488", 0.65);
+    c.rotate(e.angle);
+    cogPath(c, C.FALLING_GEAR_RADIUS, 9);
+    c.fillStyle = "#825331"; c.fill();
+    c.strokeStyle = "#ffca85"; c.lineWidth = 0.65; c.stroke();
+    c.beginPath(); c.arc(0, 0, 1.5, 0, TAU);
+    c.fillStyle = "#131c21"; c.fill();
+    c.strokeStyle = "#b4956c"; c.lineWidth = 0.6; c.stroke();
+    line(c, 1.6, 0, 2.7, 0, "#fff1bf", 1);
     c.restore();
   }
   attract(t) {

@@ -1,5 +1,32 @@
 # Mechapede — verification
 
+Latest checks: **2026-09-21**. All **116 unit, physics, motion and stability tests** pass, including twenty new machinery tests. Chrome **153.0.8010.53** and Playwright WebKit **26.0** each pass:
+
+| Suite | Passing groups per browser |
+| --- | ---: |
+| General flow, controls, audio, preferences and layout | 29 |
+| Controlled pointer-capture lifecycle | 14 |
+| Connected playfield, archived selector and scores | 10 |
+| Trackball inertia | 9 |
+| Gantry, flywheel, falling gears, round rendering and audio cues | 10 |
+| Tread rendering, turns, splitting and pause | 8 |
+| Mechanical contact and rendering invariance | 6 |
+| Shooter clearance, movement and firing | 7 at each of two viewports |
+
+The flywheel tests cover diagonal entry, gravitational rising/falling arcs, top/side/underside and oblique contact, loss of normal energy, preserved tangential velocity, swept collision without tunneling, gear detachment, falling through the complete player region, seam collisions, scoring, departure and respawn. The gantry tests cover its full warning interval, fixed column, shaft/foot geometry, full stroke, shot interruption, three-hit destruction, retraction, gear removal and lifecycle. The stress test runs ten seeds for ten simulated minutes each.
+
+A separate comparison against commit `93d9b1b` matched the current conveyors exactly for **three seeds × 5,000 frames**, including gear encounters and splits. The cancelled reversal-only proposal is absent.
+
+Desktop and 514×683 screenshots of warning, full piston extension, bounce, tumbling debris and pause were opened and visually inspected. Measured flywheel bounds remain round. The prescribed develop-web-game client completed movement/shooting bursts; no browser runtime or console errors occurred. Reports and screenshots are in ignored `output/` folders. Current rules and reproducible commands are in [development](development.md).
+
+Classic is preserved at Git tag `archive/classic-2026-09-21`, and cannot be selected in the current build. Its old score and the previous Cylinder score remain stored; this ruleset saves a separate personal best.
+
+Actual Safari and physical trackpad feel were not reverified in this update. The WebKit and controlled-capture checks do not establish hardware feel or substitute for an actual Safari test. Current gravity/rebound settings are gameplay tuning values, not a full rigid-body simulation.
+
+## Earlier verification history
+
+The results below describe earlier versions, including the now-archived Classic enemy cast.
+
 Latest checks: 2026-09-19. **106 rule, stability, mechanical-motion and trackball tests passed; all 29 general browser, 14 controlled pointer-capture and 12 Cylinder checks passed in each of Chrome and WebKit with no uncaught runtime errors.** Earlier focused mechanical-art, tread, clearance and inertia checks are recorded below. Launch with `npm start`, then open [localhost:5178](http://localhost:5178).
 
 | Area | Checks performed |

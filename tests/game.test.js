@@ -63,9 +63,9 @@ test("player has two axes, no momentum, a four-pixel per-axis frame cap, and bou
   g.step();
   assert.deepEqual(s.player, { x: 124, y: 248 });
   frames(g, 70, { dx: -100, dy: -100 });
-  assert.deepEqual(s.player, { x: 4, y: 212 });
+  assert.deepEqual(s.player, { x: 84, y: 212 });
   frames(g, 100, { dx: 100, dy: 100 });
-  assert.deepEqual(s.player, { x: 236, y: 252 });
+  assert.deepEqual(s.player, { x: 4, y: 252 });
 });
 
 test("player movement checks solid mounted gear tiles on each axis", () => {
@@ -79,23 +79,6 @@ test("player movement checks solid mounted gear tiles on each axis", () => {
   assert.equal(s.player.y, 220); // Can steer around the blocked tile.
 });
 
-test("the bottom-row shooter fits beneath every link on the second-lowest row", () => {
-  for (const dir of [-1, 1]) {
-    for (const speed of [C.CHAIN_SPEED, C.FAST_CHAIN_SPEED]) {
-      const { g, s, section } = laboratory({
-        count: 6, x: dir > 0 ? 92 : 156, y: 244, dir,
-      });
-      s.player.x = 124;
-      s.chainSpeed = speed;
-      for (let n = 0; n < 80 / (speed * C.STEP); n++) {
-        g.step();
-        assert.equal(s.mode, "playing", `dir=${dir}, speed=${speed}, frame=${n}`);
-      }
-      assert.equal(s.lives, 3);
-      assert.ok(section.links.every((link) => dir * (link.x - s.player.x) > 6));
-    }
-  }
-});
 
 test("a conveyor on the lowest row still hits the bottom-row shooter", () => {
   for (const dir of [-1, 1]) {
@@ -217,13 +200,6 @@ test("turning at a gear takes an eight-pixel diagonal U-turn with reversal halfw
   assert.deepEqual([section.links[1].x, section.links[1].y], [124, 92]);
 });
 
-test("boundary U-turns keep the head within its four-pixel edge excursion", () => {
-  const { g, section } = laboratory({ x: 236, y: 84 });
-  frames(g, 4);
-  assert.equal(section.dir, -1);
-  assert.equal(section.links[0].y, 92);
-  assert.equal(section.links[0].x, 236);
-});
 
 test("head overlap in a row makes an independent section turn", () => {
   const { g, section } = laboratory({ count: 1, x: 100, y: 84 });
@@ -254,16 +230,6 @@ test("poison clears at the bottom; an entered section stays in the player band",
   assert.ok(section.links[0].y >= C.PLAYER_MIN_Y && section.links[0].y <= 252);
 });
 
-test("a tail becomes an existing independent link only when it too is on the bottom row", () => {
-  const { g, s, section } = laboratory({ count: 3, x: 236, y: 252 });
-  const tail = section.links.at(-1);
-  g.step();
-  assert.equal(countLinks(g), 3);
-  assert.equal(s.sections.length, 2);
-  assert.equal(s.sections[1].links[0], tail);
-  assert.equal(tail.leader, true);
-  assert.equal(section.links.length, 2);
-});
 
 test("bottom arrival enables side heads, accelerates arrivals, and respects twelve slots", () => {
   const { g, s } = laboratory({ count: 1, x: 80, y: 252 });
@@ -407,74 +373,8 @@ test("bonuses award each twelve thousand, cap six reserves plus active, and stay
   );
 });
 
-test("crawler enters on its cooldown, moves diagonally/vertically, and removes only its current tile", () => {
-  const { g, s } = laboratory();
-  s.timers.crawler = 0;
-  g.step();
-  assert.ok(s.crawler);
-  const e = g.debug("enemy", {
-    type: "crawler",
-    x: 100,
-    y: 204,
-    vx: 0,
-    vy: 1,
-    phase: 1,
-  });
-  const target = g.debug("gear", { col: 12, row: 25 });
-  const adjacent = g.debug("gear", { col: 13, row: 25 });
-  g.step();
-  assert.equal(e.x, 100);
-  assert.equal(e.y, 205);
-  assert.ok(!s.gears.includes(target));
-  assert.ok(s.gears.includes(adjacent));
-});
 
-test("crawler score uses vertical proximity with arcade thresholds, independent of horizontal offset", () => {
-  for (const [distance, points] of [
-    [0, 900],
-    [21, 900],
-    [22, 600],
-    [63, 600],
-    [64, 300],
-    [90, 300],
-  ]) {
-    const { g, s } = laboratory();
-    g.debug("enemy", { type: "crawler", x: 10, y: s.player.y - distance });
-    g.debug("hitEnemy", { type: "crawler" });
-    assert.equal(s.score, points);
-  }
-});
 
-test("crawler speed changes at five thousand and its upper boundary shrinks with high scores", () => {
-  const { g, s } = laboratory();
-  const e = g.debug("enemy", {
-    type: "crawler",
-    x: 100,
-    y: 180,
-    vx: 1,
-    vy: 1,
-    phase: 1,
-  });
-  g.step();
-  assert.equal(e.x, 101);
-  g.debug("score", { points: 5000 });
-  g.step();
-  assert.equal(e.x, 102);
-  const fast = g.debug("enemy", {
-    type: "crawler",
-    x: 100,
-    y: 180,
-    vx: 1,
-    vy: 1,
-    phase: 1,
-  });
-  g.step();
-  assert.equal(fast.x, 102);
-  s.score = 80000;
-  assert.equal(g._crawlerMinY(), 168);
-  s.score = 160000;
-  assert.equal(g._crawlerMinY(), 200);
-});
 
 test("dispenser eligibility requires a shorter main chain and few gears across bottom eleven rows", () => {
   const { g, s } = laboratory();
@@ -506,34 +406,6 @@ test("dispenser drops immediate gears, needs two hits, and accelerates on its fi
   g.debug("hitEnemy", { type: "dispenser" });
   assert.equal(s.dispenser, null);
   assert.equal(s.score, 200);
-});
-
-test("drone uses the shared slot, traverses an upper row, electrifies its tile and scores a thousand", () => {
-  const { g, s } = laboratory();
-  s.mainLength = 10;
-  s.frame = 255;
-  g.debug("enemy", { type: "dispenser", x: 100, y: 30 });
-  const saved = g.random;
-  g.random = () => 0;
-  g.step();
-  g.random = saved;
-  assert.equal(s.drone, null);
-  s.dispenser = null;
-  const e = g.debug("enemy", {
-    type: "drone",
-    x: 100,
-    y: 100,
-    dir: 1,
-    speed: 60,
-  });
-  const gear = g.debug("gear", { col: 12, row: 12, hp: 2 });
-  g.step();
-  assert.equal(e.x, 101);
-  assert.equal(gear.electrified, true);
-  assert.equal(gear.hp, 2);
-  assert.equal(s.dispenser, null);
-  g.debug("hitEnemy", { type: "drone" });
-  assert.equal(s.score, 1000);
 });
 
 test("gear creation never heals an existing tile and omits the excluded edge rows", () => {
@@ -574,26 +446,19 @@ test("representative deterministic scenarios build without exceptions or malform
 
 test("wave intermission keeps player input, shots and supporting enemies active and preserves them", () => {
   const { g, s } = laboratory({ count: 1 });
-  const crawler = g.debug("enemy", {
-    type: "crawler",
-    x: 20,
-    y: 180,
-    vx: 1,
-    vy: 1,
-    phase: 3,
-  });
+  const gantry = g.debug("enemy", { type: "gantry", x: 20, entered: true, dir: 1 });
   g.debug("hitLink", { index: 0 });
   g.step();
   assert.equal(s.mode, "wave");
   const x = s.player.x,
-    enemyX = crawler.x;
+    enemyX = gantry.x;
   g.step({ dx: 3, dy: -2, fire: true });
   assert.equal(s.player.x, x + 3);
-  assert.equal(crawler.x, enemyX + 1);
+  assert.ok(Math.abs(gantry.x - enemyX - C.GANTRY_SPEED * C.STEP) < 1e-8);
   assert.ok(s.bullet);
   frames(g, 65);
   assert.equal(s.wave, 2);
-  assert.equal(s.crawler, crawler);
+  assert.equal(s.gantry, gantry);
 });
 
 test("death during a wave intermission restarts the forthcoming formation", () => {
@@ -653,30 +518,19 @@ test("the reserve cap applies while dead and repair points can still rescue the 
 test("projectile obstacle addressing precedes all overlapping moving-object slots", () => {
   const { g, s, section } = laboratory({ count: 1, x: 124, y: 114 });
   const gear = g.debug("gear", { col: 15, row: 14 });
-  const crawler = g.debug("enemy", { type: "crawler", x: 124, y: 118 });
+  const gantry = g.debug("enemy", { type: "gantry", x: 124, entered: true });
   s.bullet = { x: 124, y: 124 }; // Previous V lookup addresses row 14; new y is 117.
   g._moveBullet();
   assert.equal(gear.hp, 3);
-  assert.equal(s.crawler, crawler);
+  assert.equal(s.gantry, gantry);
   assert.equal(section.links.length, 1);
   assert.equal(s.score, 0);
   assert.equal(s.bullet, null);
 });
 
-test("projectiles scan crawler before the shared enemy and chain, regardless of nearer overlap", () => {
-  const { g, s } = laboratory({ count: 1, x: 124, y: 119 });
-  const dispenser = g.debug("enemy", { type: "dispenser", x: 124, y: 120 });
-  g.debug("enemy", { type: "crawler", x: 124, y: 114 });
-  s.bullet = { x: 124, y: 124 };
-  g._moveBullet();
-  assert.equal(s.crawler, null);
-  assert.equal(s.dispenser, dispenser);
-  assert.equal(dispenser.hp, 2);
-  assert.equal(countLinks(g), 1);
-});
 
-test("the shared dispenser or drone slot precedes overlapping chain slots", () => {
-  for (const type of ["dispenser", "drone"]) {
+test("the dispenser and flywheel slots precedes overlapping chain slots", () => {
+  for (const type of ["dispenser", "flywheel"]) {
     const { g, s } = laboratory({ count: 1, x: 124, y: 119 });
     const enemy = g.debug("enemy", { type, x: 124, y: 114 });
     s.bullet = { x: 124, y: 124 };
@@ -684,7 +538,7 @@ test("the shared dispenser or drone slot precedes overlapping chain slots", () =
     assert.equal(countLinks(g), 1);
     if (type === "dispenser") assert.equal(enemy.hp, 1);
     else {
-      assert.equal(s.drone, null);
+      assert.equal(s.flywheel, null);
       assert.equal(s.score, 1000);
     }
   }
@@ -734,18 +588,7 @@ test("projectile hit windows are strict and do not include visual pulse length o
     g._moveBullet();
     assert.equal(countLinks(g), hit ? 0 : 1, `link at ${x},${y}`);
   }
-  for (const [type, offset, hit] of [
-    ["crawler", 9, true],
-    ["crawler", 10, false],
-    ["drone", 9, true],
-    ["drone", 10, false],
-  ]) {
-    const { g, s } = laboratory({ x: 40, y: 40 });
-    g.debug("enemy", { type, x: 124 + offset, y: 117 });
-    s.bullet = { x: 124, y: 124 };
-    g._moveBullet();
-    assert.equal(s[type] === null, hit);
-  }
+
 });
 
 test("the first dispenser hit enlarges only its vertical projectile window", () => {

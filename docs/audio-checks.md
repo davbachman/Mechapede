@@ -1,3 +1,5 @@
+> Historical audio checks for the archived enemy cast. Current gantry and flywheel cues are exercised by the browser machinery suite; see [verification](verification.md).
+
 # Audio verification
 
 The soundscape in `src/audio.js` is original Web Audio synthesis: filtered noise,

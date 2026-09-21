@@ -222,19 +222,15 @@ for (const [name, browserType, options] of [
     );
 
     for (const sign of [1, -1]) {
-      await reset(sign > 0 ? 208 : 32);
+      await reset(sign > 0 ? 238 : 2);
       await swipe({ distance: sign * 12 });
-      await coast(1000);
-      assert.equal((await state()).player.x, sign > 0 ? 236 : 4);
-      await assertStopped();
-      const atEdge = (await state()).player.x;
+      await coast(300);
+      const wrapped = (await state()).player.x;
+      assert.ok(sign > 0 ? wrapped < 120 : wrapped > 120, `coast must cross seam: ${wrapped}`);
       await swipe({ distance: -sign * 0.5, duration: 30, samples: 1 });
-      assert.ok(sign * ((await state()).player.x - atEdge) < 0);
       await assertStopped();
     }
-    check(
-      "Both side boundaries cancel blocked spin and immediately allow reversal",
-    );
+    check("Horizontal spin crosses both connected edges; a reverse touch still brakes it");
 
     await reset(24, 228);
     await page.evaluate(() => {

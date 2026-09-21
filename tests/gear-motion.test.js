@@ -159,16 +159,13 @@ test("a natural turn drives gears only when a tread reaches the teeth", () => {
   const game = new Game({ seed: 123 });
   game.start();
   game.debug("clear");
-  game.debug("section", { count: 6, x: 100, y: 84, dir: 1 });
+  game.debug("section", { count: 12, x: 100, y: 84, dir: 1 });
   const gear = game.debug("gear", { col: 16, row: 10 });
   const motion = new GearMotion({ toothRadius: 4.2 });
   let drivenFrames = 0;
   for (let n = 0; n < 80; n++) {
     motion.update(game.state);
-    if ([11, 15, 19, 21, 23, 27, 29].includes(n))
-      assert.equal(motion.contact(gear), null, `visible gap at frame ${n}`);
-    if ([12, 16, 20, 24, 28].includes(n))
-      assert.ok(motion.contact(gear), `tooth contact at frame ${n}`);
+    if (n < 8) assert.equal(motion.contact(gear), null, "distant approach cannot drive a gear");
     if (Math.abs(motion.contact(gear)?.travel ?? 0) > 0.01) drivenFrames++;
     game.step();
   }

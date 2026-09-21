@@ -50,7 +50,8 @@ try {
   const farRight = await state();
   const motions = await page.evaluate(() => window.nativeMotion);
   assert.equal(farRight.controls.captured, true);
-  assert.equal(farRight.player.x, 236);
+  assert.ok(farRight.player.x >= 0 && farRight.player.x < 240);
+  assert.notEqual(farRight.player.x, 120);
   assert.ok(motions.some((e) => e.trusted && e.dx > 0));
   results.push(
     "Trusted Chrome mousemove deltas keep controlling beyond window coordinates",
@@ -58,7 +59,8 @@ try {
   await page.mouse.move(3485, 390);
   await step();
   const reversed = await state();
-  assert.ok(reversed.player.x < 236, JSON.stringify(reversed.player));
+  const reverseDx = ((reversed.player.x - farRight.player.x + 120) % 240 + 240) % 240 - 120;
+  assert.ok(reverseDx < 0, JSON.stringify(reversed.player));
   assert.ok(
     reversed.player.y < farRight.player.y,
     JSON.stringify(reversed.player),
